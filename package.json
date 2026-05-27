@@ -1,0 +1,26 @@
+{
+  "name": "gyaku-workspace",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@11.0.4",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "all": "run-s -l format build typecheck test test:*",
+    "build": "pnpm -C packages/gyaku run build",
+    "format": "pnpm -r run format",
+    "lint": "pnpm -r run lint",
+    "test:example": "pnpm -r run start",
+    "test:mutation": "pnpm -C packages/gyaku run test:mutation",
+    "test": "pnpm -C packages/gyaku run test",
+    "typecheck": "pnpm -r run typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
+    "npm-run-all2": "^9.0.1"
+  }
+}

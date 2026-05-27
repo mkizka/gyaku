@@ -1,0 +1,21 @@
+{
+  "name": "@gyaku/example-http",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "prettier --check .",
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "@gyaku/di": "workspace:*",
+    "hono": "^4.12.22"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3"
+  }
+}

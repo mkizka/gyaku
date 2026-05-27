@@ -1,0 +1,65 @@
+{
+  "name": "@gyaku/di",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tiny, modern DI container for TypeScript, built around `await using`",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mkizka/gyaku.git",
+    "directory": "packages/gyaku"
+  },
+  "homepage": "https://github.com/mkizka/gyaku#readme",
+  "bugs": {
+    "url": "https://github.com/mkizka/gyaku/issues"
+  },
+  "author": "mkizka <g.mkizka@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "di",
+    "dependency-injection",
+    "typescript",
+    "type-safe",
+    "async"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "format": "eslint --fix . && prettier --write .",
+    "lint": "eslint . && prettier --check .",
+    "test": "vitest run",
+    "test:mutation": "stryker run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@mkizka/eslint-config": "^10.0.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-pkg": "^0.22.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "prettier": {
+    "plugins": [
+      "prettier-plugin-pkg"
+    ]
+  }
+}
