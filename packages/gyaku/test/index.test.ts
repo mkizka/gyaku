@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createContainer } from "../src/index.ts";
+import { createRegistry } from "../src/index.ts";
 
-describe("createContainer", () => {
-  it("builds services eagerly and passes only declared dependencies", async () => {
+describe("createRegistry", () => {
+  it("resolves services eagerly and passes only declared dependencies", async () => {
     const calls: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("logger", () => {
         calls.push("logger");
         return {
@@ -26,21 +26,21 @@ describe("createContainer", () => {
         };
       });
 
-    await using services = await container.build();
+    await using services = await registry.resolve();
 
     expect(calls).toEqual(["logger", "db", "repo"]);
     expect(services.repo.find()).toBe("select 1");
   });
 
-  it("creates new instances for each build", async () => {
+  it("creates new instances for each resolve", async () => {
     let nextId = 0;
 
-    const container = createContainer().service("service", () => ({
+    const registry = createRegistry().service("service", () => ({
       id: nextId++,
     }));
 
-    await using first = await container.build();
-    await using second = await container.build();
+    await using first = await registry.resolve();
+    await using second = await registry.resolve();
 
     expect(first.service).not.toBe(second.service);
     expect(first.service.id).toBe(0);
@@ -50,7 +50,7 @@ describe("createContainer", () => {
   it("disposes services in reverse creation order", async () => {
     const disposed: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           disposed.push("first");
@@ -64,21 +64,21 @@ describe("createContainer", () => {
       }));
 
     {
-      await using _services = await container.build();
+      await using _services = await registry.resolve();
     }
 
     expect(disposed).toEqual(["second", "first"]);
   });
 
   it("calls dispose methods with the service as this", async () => {
-    const container = createContainer().service("service", () => ({
+    const registry = createRegistry().service("service", () => ({
       disposed: false,
       [Symbol.dispose]() {
         this.disposed = true;
       },
     }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await services[Symbol.asyncDispose]();
 
@@ -88,7 +88,7 @@ describe("createContainer", () => {
   it("disposes function services", async () => {
     let disposed = false;
 
-    const container = createContainer().service("service", () => {
+    const registry = createRegistry().service("service", () => {
       return Object.assign(() => "value", {
         [Symbol.dispose]: () => {
           disposed = true;
@@ -96,7 +96,7 @@ describe("createContainer", () => {
       });
     });
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     expect(services.service()).toBe("value");
     expect(disposed).toBe(false);
@@ -109,13 +109,13 @@ describe("createContainer", () => {
   it("ignores repeated dispose calls", async () => {
     let disposeCount = 0;
 
-    const container = createContainer().service("service", () => ({
+    const registry = createRegistry().service("service", () => ({
       [Symbol.dispose]: () => {
         disposeCount++;
       },
     }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await services[Symbol.asyncDispose]();
     await services[Symbol.asyncDispose]();
@@ -126,7 +126,7 @@ describe("createContainer", () => {
   it("keeps disposing after dispose errors and throws an AggregateError", async () => {
     const disposed: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           disposed.push("first");
@@ -140,7 +140,7 @@ describe("createContainer", () => {
         },
       }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await expect(services[Symbol.asyncDispose]()).rejects.toThrow(
       AggregateError,
@@ -151,17 +151,17 @@ describe("createContainer", () => {
   it("cleans up created services when a later factory fails", async () => {
     const disposed: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           disposed.push("first");
         },
       }))
       .service("second", () => {
-        throw new Error("build failed");
+        throw new Error("factory failed");
       });
 
-    await expect(container.build()).rejects.toThrow(
+    await expect(registry.resolve()).rejects.toThrow(
       'Service "second" factory failed',
     );
     expect(disposed).toEqual(["first"]);
@@ -170,7 +170,7 @@ describe("createContainer", () => {
   it("skips dependents when their dependency fails", async () => {
     const events: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("dep", () => {
         events.push("dep");
         throw new Error("dep failed");
@@ -184,56 +184,56 @@ describe("createContainer", () => {
         };
       });
 
-    await expect(container.build()).rejects.toThrow(
+    await expect(registry.resolve()).rejects.toThrow(
       'Service "dep" factory failed',
     );
     expect(events).toEqual(["dep"]);
   });
 
-  it("aggregates build and cleanup errors", async () => {
-    const container = createContainer()
+  it("aggregates resolve and cleanup errors", async () => {
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           throw new Error("cleanup failed");
         },
       }))
       .service("second", () => {
-        throw new Error("build failed");
+        throw new Error("factory failed");
       });
 
-    await expect(container.build()).rejects.toThrow(
-      "Failed to build services and cleanup created services",
+    await expect(registry.resolve()).rejects.toThrow(
+      "Failed to resolve services and cleanup created services",
     );
   });
 
   it("attaches the first factory error as the aggregate cause", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           throw new Error("cleanup failed");
         },
       }))
       .service("second", () => {
-        throw new Error("build failed");
+        throw new Error("factory failed");
       });
 
-    await expect(container.build()).rejects.toMatchObject({
+    await expect(registry.resolve()).rejects.toMatchObject({
       cause: {
         message: 'Service "second" factory failed',
-        cause: { message: "build failed" },
+        cause: { message: "factory failed" },
       },
     });
   });
 
   it("rejects invalid service definitions at runtime", () => {
     expect(() => {
-      createContainer()
+      createRegistry()
         // @ts-expect-error "then" is reserved at the type level too.
         .service("then", () => undefined);
     }).toThrow('Service key "then" is reserved');
 
     expect(() => {
-      createContainer()
+      createRegistry()
         .service("logger", () => undefined)
         // @ts-expect-error duplicate keys are rejected at the type level too.
         .service("logger", () => undefined);
@@ -241,11 +241,11 @@ describe("createContainer", () => {
 
     expect(() => {
       // @ts-expect-error "db" is not registered at the type level either.
-      createContainer().service("repo", ["db"], () => undefined);
+      createRegistry().service("repo", ["db"], () => undefined);
     }).toThrow('Service "repo" depends on unregistered service "db"');
 
     expect(() => {
-      createContainer()
+      createRegistry()
         .service("db", () => undefined)
         // @ts-expect-error missing factory is rejected at the type level too.
         .service("repo", ["db"]);
@@ -255,21 +255,21 @@ describe("createContainer", () => {
   it("treats __proto__ as a regular key without polluting the prototype", async () => {
     const polluted = { polluted: true };
 
-    await using services = await createContainer()
+    await using services = await createRegistry()
       .value("__proto__", polluted)
-      .build();
+      .resolve();
 
     expect(services["__proto__"]).toBe(polluted);
     expect("polluted" in {}).toBe(false);
   });
 
   it("does not attempt to dispose primitive or null services", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("num", () => 42)
       .service("str", () => "hello")
       .service("nil", () => null);
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     expect(services.num).toBe(42);
     expect(services.str).toBe("hello");
@@ -281,13 +281,13 @@ describe("createContainer", () => {
   it("registers an existing value with .value", async () => {
     const config = { port: 3000 };
 
-    const container = createContainer()
+    const registry = createRegistry()
       .value("config", config)
       .service("server", ["config"], ({ config }) => ({
         port: config.port,
       }));
 
-    await using services = await container.build();
+    await using services = await registry.resolve();
 
     expect(services.config).toBe(config);
     expect(services.server.port).toBe(3000);
@@ -295,20 +295,20 @@ describe("createContainer", () => {
 
   it("applies the same key validation to .value as .service", () => {
     expect(() => {
-      createContainer()
+      createRegistry()
         // @ts-expect-error "then" is reserved at the type level too.
         .value("then", 1);
     }).toThrow('Service key "then" is reserved');
 
     expect(() => {
-      createContainer()
+      createRegistry()
         .value("config", { port: 3000 })
         // @ts-expect-error duplicate keys are rejected at the type level too.
         .value("config", { port: 4000 });
     }).toThrow('Service "config" is already registered');
 
     expect(() => {
-      createContainer()
+      createRegistry()
         .service("logger", () => undefined)
         // @ts-expect-error duplicate keys are rejected at the type level too.
         .value("logger", { log: () => undefined });
@@ -316,7 +316,7 @@ describe("createContainer", () => {
   });
 
   it("replaces a registered factory with .override", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `prod:${message}`,
       }))
@@ -324,11 +324,11 @@ describe("createContainer", () => {
         query: (sql: string) => logger.log(sql),
       }));
 
-    const testContainer = container.override("db", () => ({
+    const testRegistry = registry.override("db", () => ({
       query: (sql: string) => `stub:${sql}`,
     }));
 
-    await using services = await testContainer.build();
+    await using services = await testRegistry.resolve();
 
     expect(services.db.query("select 1")).toBe("stub:select 1");
   });
@@ -336,7 +336,7 @@ describe("createContainer", () => {
   it("preserves creation order when overriding", async () => {
     const calls: string[] = [];
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => {
         calls.push("first");
         return { tag: "first" as const };
@@ -346,19 +346,19 @@ describe("createContainer", () => {
         return { tag: "second" as const, first };
       });
 
-    const overridden = container.override("first", () => {
+    const overridden = registry.override("first", () => {
       calls.push("first-override");
       return { tag: "first" as const };
     });
 
-    await using services = await overridden.build();
+    await using services = await overridden.resolve();
 
     expect(calls).toEqual(["first-override", "second"]);
     expect(services.second.first.tag).toBe("first");
   });
 
   it("inherits the original service's dependencies in .override", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `log:${message}`,
       }))
@@ -366,35 +366,35 @@ describe("createContainer", () => {
         query: (sql: string) => logger.log(`real:${sql}`),
       }));
 
-    const overridden = container.override("db", ({ logger }) => ({
+    const overridden = registry.override("db", ({ logger }) => ({
       query: (sql: string) => logger.log(`override:${sql}`),
     }));
 
-    await using services = await overridden.build();
+    await using services = await overridden.resolve();
 
     expect(services.db.query("select 1")).toBe("log:override:select 1");
   });
 
   it("applies the latest override when called multiple times", async () => {
-    const container = createContainer().service("greeting", () => "original");
+    const registry = createRegistry().service("greeting", () => "original");
 
-    const overridden = container
+    const overridden = registry
       .override("greeting", () => "first")
       .override("greeting", () => "second");
 
-    await using services = await overridden.build();
+    await using services = await overridden.resolve();
 
     expect(services.greeting).toBe("second");
   });
 
   it("rejects overriding an unregistered key at runtime", () => {
-    const container = createContainer().service("logger", () => ({
+    const registry = createRegistry().service("logger", () => ({
       log: (message: string) => message,
     }));
 
     expect(() => {
       // @ts-expect-error overriding an unregistered key is rejected at the type level too.
-      container.override("missing", () => undefined);
+      registry.override("missing", () => undefined);
     }).toThrow('Service "missing" is not registered');
   });
 
@@ -405,7 +405,7 @@ describe("createContainer", () => {
       resolveSlow = resolve;
     });
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("slow", async () => {
         events.push("slow-start");
         await slowReady;
@@ -417,13 +417,13 @@ describe("createContainer", () => {
         return { tag: "fast" as const };
       });
 
-    const buildPromise = container.build();
+    const resolvePromise = registry.resolve();
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(events).toEqual(["slow-start", "fast"]);
 
     resolveSlow();
-    await using services = await buildPromise;
+    await using services = await resolvePromise;
 
     expect(events).toEqual(["slow-start", "fast", "slow-end"]);
     expect(services.slow.tag).toBe("slow");
@@ -437,7 +437,7 @@ describe("createContainer", () => {
       resolveSlow = resolve;
     });
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("slow", async () => {
         await slowReady;
         return {
@@ -452,10 +452,10 @@ describe("createContainer", () => {
         },
       }));
 
-    const buildPromise = container.build();
+    const resolvePromise = registry.resolve();
     await new Promise<void>((resolve) => setImmediate(resolve));
     resolveSlow();
-    const services = await buildPromise;
+    const services = await resolvePromise;
 
     await services[Symbol.asyncDispose]();
 
@@ -473,7 +473,7 @@ describe("createContainer", () => {
       resolveSlowDispose = resolve;
     });
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("fast", () => ({
         [Symbol.dispose]: () => {
           events.push("fast-dispose");
@@ -490,10 +490,10 @@ describe("createContainer", () => {
         };
       });
 
-    const buildPromise = container.build();
+    const resolvePromise = registry.resolve();
     await new Promise<void>((resolve) => setImmediate(resolve));
     resolveSlowBuild();
-    const services = await buildPromise;
+    const services = await resolvePromise;
 
     const disposePromise = services[Symbol.asyncDispose]();
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -517,7 +517,7 @@ describe("createContainer", () => {
       resolveRepoA = resolve;
     });
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("db", () => ({
         [Symbol.dispose]: () => {
           events.push("db");
@@ -536,7 +536,7 @@ describe("createContainer", () => {
         },
       }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
     const disposePromise = services[Symbol.asyncDispose]();
 
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -555,7 +555,7 @@ describe("createContainer", () => {
       releaseChild = resolve;
     });
 
-    const container = createContainer()
+    const registry = createRegistry()
       .service("parent", () => ({
         [Symbol.dispose]: () => {
           events.push("parent");
@@ -569,7 +569,7 @@ describe("createContainer", () => {
         },
       }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
     const disposePromise = services[Symbol.asyncDispose]();
 
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -581,7 +581,7 @@ describe("createContainer", () => {
   });
 
   it("reports dispose failures with the documented message", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           throw new Error("first dispose failed");
@@ -593,7 +593,7 @@ describe("createContainer", () => {
         },
       }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await expect(services[Symbol.asyncDispose]()).rejects.toThrow(
       "Failed to dispose services",
@@ -603,11 +603,11 @@ describe("createContainer", () => {
   it("wraps factory errors with the service name and preserves the cause", async () => {
     const original = new Error("connect ECONNREFUSED");
 
-    const container = createContainer().service("db", () => {
+    const registry = createRegistry().service("db", () => {
       throw original;
     });
 
-    await expect(container.build()).rejects.toMatchObject({
+    await expect(registry.resolve()).rejects.toMatchObject({
       message: 'Service "db" factory failed',
       cause: original,
     });
@@ -616,13 +616,13 @@ describe("createContainer", () => {
   it("wraps dispose errors with the service name and preserves the cause", async () => {
     const original = new Error("close timed out");
 
-    const container = createContainer().service("db", () => ({
+    const registry = createRegistry().service("db", () => ({
       [Symbol.dispose]: () => {
         throw original;
       },
     }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await expect(services[Symbol.asyncDispose]()).rejects.toMatchObject({
       message: 'Service "db" dispose failed',
@@ -631,7 +631,7 @@ describe("createContainer", () => {
   });
 
   it("includes wrapped dispose errors in the aggregate", async () => {
-    const container = createContainer()
+    const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
           throw new Error("first dispose failed");
@@ -643,7 +643,7 @@ describe("createContainer", () => {
         },
       }));
 
-    const services = await container.build();
+    const services = await registry.resolve();
 
     await expect(services[Symbol.asyncDispose]()).rejects.toMatchObject({
       errors: [

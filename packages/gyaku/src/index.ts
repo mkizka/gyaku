@@ -20,7 +20,7 @@ type ServiceDefinition = {
   factory: ServiceFactory;
 };
 
-export type ContainerBuilder<
+type ServiceRegistry<
   Services extends ServiceMap,
   DepsMap extends DepsMapBase<Services>,
 > = {
@@ -28,7 +28,7 @@ export type ContainerBuilder<
     <const Key extends string, Result>(
       key: NewKey<Key, Services>,
       factory: () => Result,
-    ): ContainerBuilder<
+    ): ServiceRegistry<
       Services & Record<Key, Awaited<Result>>,
       DepsMap & Record<Key, readonly []>
     >;
@@ -40,7 +40,7 @@ export type ContainerBuilder<
       key: NewKey<Key, Services>,
       dependencies: Deps,
       factory: (deps: Pick<Services, Deps[number]>) => Result,
-    ): ContainerBuilder<
+    ): ServiceRegistry<
       Services & Record<Key, Awaited<Result>>,
       DepsMap & Record<Key, Deps>
     >;
@@ -48,7 +48,7 @@ export type ContainerBuilder<
   value: <const Key extends string, T>(
     key: NewKey<Key, Services>,
     instance: T,
-  ) => ContainerBuilder<
+  ) => ServiceRegistry<
     Services & Record<Key, T>,
     DepsMap & Record<Key, readonly []>
   >;
@@ -57,17 +57,17 @@ export type ContainerBuilder<
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
     ) => Services[Key] | Promise<Services[Key]>,
-  ) => ContainerBuilder<Services, DepsMap>;
-  build: () => Promise<Services & AsyncDisposable>;
+  ) => ServiceRegistry<Services, DepsMap>;
+  resolve: () => Promise<Services & AsyncDisposable>;
 };
 
-const makeBuilder = <
+const makeRegistry = <
   Services extends ServiceMap,
   DepsMap extends DepsMapBase<Services>,
 >(
   definitions: readonly ServiceDefinition[],
-): ContainerBuilder<Services, DepsMap> => {
-  const builder = {
+): ServiceRegistry<Services, DepsMap> => {
+  const registry = {
     service(
       key: string,
       factoryOrDeps: ServiceFactory | readonly string[],
@@ -102,11 +102,11 @@ const makeBuilder = <
         }
       }
 
-      return makeBuilder([...definitions, { key, dependencies, factory }]);
+      return makeRegistry([...definitions, { key, dependencies, factory }]);
     },
 
     value(key: string, instance: unknown) {
-      return builder.service(key, () => instance);
+      return registry.service(key, () => instance);
     },
 
     override(key: string, factory: ServiceFactory) {
@@ -118,10 +118,10 @@ const makeBuilder = <
       const next = [...definitions];
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- index was just verified to be a valid position in definitions.
       next[index] = { ...next[index]!, factory };
-      return makeBuilder(next);
+      return makeRegistry(next);
     },
 
-    async build() {
+    async resolve() {
       // Null-prototype so service keys like `__proto__` become regular own
       // properties instead of triggering the prototype setter, and so they
       // cannot collide with inherited `Object.prototype` members.
@@ -161,7 +161,7 @@ const makeBuilder = <
         const cleanupErrors = await disposeAll(values, definitions);
         throwErrors(
           [...factoryErrors, ...cleanupErrors],
-          "Failed to build services and cleanup created services",
+          "Failed to resolve services and cleanup created services",
           { cause: factoryErrors[0] },
         );
       }
@@ -178,14 +178,14 @@ const makeBuilder = <
     },
   };
 
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The structural builder satisfies the overloaded ContainerBuilder type at runtime.
-  return builder as unknown as ContainerBuilder<Services, DepsMap>;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The structural registry satisfies the overloaded ServiceRegistry type at runtime.
+  return registry as unknown as ServiceRegistry<Services, DepsMap>;
 };
 
-export const createContainer = (): ContainerBuilder<
+export const createRegistry = (): ServiceRegistry<
   Record<never, never>,
   Record<never, readonly []>
-> => makeBuilder([]);
+> => makeRegistry([]);
 
 const throwErrors = (
   errors: readonly unknown[],

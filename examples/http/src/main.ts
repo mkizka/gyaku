@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
-import { createContainer } from "@gyaku/di";
+import { createRegistry } from "@gyaku/di";
 
 type Config = { port: number };
 
@@ -101,7 +101,7 @@ const createServer = async ({
   };
 };
 
-const container = createContainer()
+const registry = createRegistry()
   .value("config", { port: Number(process.env.PORT ?? 0) } satisfies Config)
   .service("logger", createLogger)
   .service("db", ["logger"], createDb)
@@ -110,7 +110,7 @@ const container = createContainer()
   .service("server", ["app", "config", "logger"], createServer);
 
 const main = async () => {
-  await using app = await container.build();
+  await using app = await registry.resolve();
 
   const ok = await fetch(`${app.server.url}/users/1`);
   assert.equal(ok.status, 200);

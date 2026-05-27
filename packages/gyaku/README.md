@@ -8,11 +8,11 @@ Gyaku (逆, "inversion") is a tiny, modern DI container for TypeScript, built ar
 
 ## Why @gyaku/di?
 
-- Type-safe builder chain
+- Type-safe registry chain
 - No decorators, no `reflect-metadata`
 - Sync and async factories under one API
 - Unknown deps and duplicate keys caught at compile time
-- Parallel build along the dependency graph
+- Parallel resolution along the dependency graph
 - Parallel, graph-aware disposal via `await using`
 - Auto-cleanup of partially built services on failure
 - `Symbol.asyncDispose` and `Symbol.dispose` both honored
@@ -28,17 +28,17 @@ npm install @gyaku/di
 ## Usage
 
 ```ts
-import { createContainer } from "@gyaku/di";
+import { createRegistry } from "@gyaku/di";
 
 const createGreeter = ({ name }: { name: string }) => ({
   say: () => console.log(`hello, ${name}`),
 });
 
-const container = createContainer()
+const registry = createRegistry()
   .value("name", "gyaku")
   .service("greeter", ["name"], createGreeter);
 
-await using services = await container.build();
+await using services = await registry.resolve();
 services.greeter.say();
 // hello, gyaku
 ```
@@ -47,16 +47,16 @@ Runnable examples: [`examples/`](./examples).
 
 ## API
 
-### `createContainer()`
+### `createRegistry()`
 
-Returns an empty, immutable builder.
+Returns an empty, immutable registry.
 
 ### `.value(key, instance)`
 
 Registers a pre-built value, keeping its type as-is.
 
 ```ts
-createContainer().value("config", { port: 3000 });
+createRegistry().value("config", { port: 3000 });
 ```
 
 ### `.service(key, factory)` / `.service(key, deps, factory)`
@@ -64,7 +64,7 @@ createContainer().value("config", { port: 3000 });
 Registers a sync or async factory that receives only the dependencies listed in `deps`.
 
 ```ts
-const container = createContainer()
+const registry = createRegistry()
   .value("config", { port: 3000 })
   .service("logger", createLogger)
   .service("server", ["config", "logger"], createServer);
@@ -75,12 +75,12 @@ const container = createContainer()
 Swaps a registered factory in place, keeping the original deps and return type.
 
 ```ts
-const testContainer = productionContainer.override("db", () => stubDb);
+const testRegistry = productionRegistry.override("db", () => stubDb);
 ```
 
-### `build()`
+### `resolve()`
 
-Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was built.
+Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
 ### Notes
 

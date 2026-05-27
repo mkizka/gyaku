@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createContainer } from "@gyaku/di";
+import { createRegistry } from "@gyaku/di";
 
 type Logger = { log: (message: string) => void };
 
@@ -36,12 +36,12 @@ const createUserRepository = ({ db }: { db: Db }): UserRepository => ({
   find: (id) => db.findUser(id),
 });
 
-const productionContainer = createContainer()
+const productionRegistry = createRegistry()
   .service("logger", createLogger)
   .service("db", ["logger"], createDb)
   .service("userRepository", ["db"], createUserRepository);
 
-const testContainer = productionContainer.override("db", ({ logger }): Db => {
+const testRegistry = productionRegistry.override("db", ({ logger }): Db => {
   const users = new Map<number, User>([[1, { id: 1, name: "stub-alice" }]]);
   logger.log("stub db ready");
   return {
@@ -53,7 +53,7 @@ const testContainer = productionContainer.override("db", ({ logger }): Db => {
 });
 
 const main = async () => {
-  await using app = await testContainer.build();
+  await using app = await testRegistry.resolve();
 
   const alice = await app.userRepository.find(1);
   assert.deepEqual(alice, { id: 1, name: "stub-alice" });

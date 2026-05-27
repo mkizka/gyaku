@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createContainer } from "@gyaku/di";
+import { createRegistry } from "@gyaku/di";
 
 class Logger {
   log(message: string) {
@@ -51,7 +51,7 @@ class Greeter {
   }
 }
 
-const container = createContainer()
+const registry = createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], Db.create)
   .service(
@@ -61,7 +61,7 @@ const container = createContainer()
   );
 
 const main = async () => {
-  await using app = await container.build();
+  await using app = await registry.resolve();
   const message = await app.greeter.say(1);
   assert.equal(message, "hello, user-1!");
   console.log(message);
