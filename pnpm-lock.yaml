@@ -9,13 +9,13 @@ importers:
   .:
     devDependencies:
       husky:
-        specifier: ^9.1.7
+        specifier: 9.1.7
         version: 9.1.7
       lint-staged:
-        specifier: ^17.0.5
+        specifier: 17.0.5
         version: 17.0.5
       npm-run-all2:
-        specifier: ^9.0.1
+        specifier: 9.0.1
         version: 9.0.1
 
   examples/basic:
@@ -91,34 +91,34 @@ importers:
   packages/gyaku:
     devDependencies:
       '@mkizka/eslint-config':
-        specifier: ^10.0.0
+        specifier: 10.0.0
         version: 10.0.0(@typescript-eslint/eslint-plugin@8.59.4(@typescript-eslint/parser@8.59.4(eslint@10.4.0)(typescript@6.0.3))(eslint@10.4.0)(typescript@6.0.3))(eslint@10.4.0)(typescript@6.0.3)
       '@stryker-mutator/core':
-        specifier: ^9.6.1
+        specifier: 9.6.1
         version: 9.6.1(@types/node@25.9.1)
       '@stryker-mutator/vitest-runner':
-        specifier: ^9.6.1
+        specifier: 9.6.1
         version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@25.9.1))(vitest@4.1.7(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(yaml@2.9.0)))
       '@types/node':
-        specifier: ^25.9.1
+        specifier: 25.9.1
         version: 25.9.1
       eslint:
-        specifier: ^10.4.0
+        specifier: 10.4.0
         version: 10.4.0
       prettier:
-        specifier: ^3.8.3
+        specifier: 3.8.3
         version: 3.8.3
       prettier-plugin-pkg:
-        specifier: ^0.22.1
+        specifier: 0.22.1
         version: 0.22.1(prettier@3.8.3)
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.14
+        specifier: 8.0.14
         version: 8.0.14(@types/node@25.9.1)(yaml@2.9.0)
       vitest:
-        specifier: ^4.1.7
+        specifier: 4.1.7
         version: 4.1.7(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(yaml@2.9.0))
 
 packages:
