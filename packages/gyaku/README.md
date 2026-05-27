@@ -6,7 +6,7 @@
 
 Gyaku (逆, "inversion") is a tiny, modern DI container for TypeScript, built around `await using`.
 
-## Why @gyaku/di?
+## Why gyaku?
 
 - Type-safe registry chain
 - No decorators, no `reflect-metadata`
