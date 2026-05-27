@@ -9,7 +9,7 @@ type ServiceFactory = (deps: ServiceMap) => unknown;
 
 // `then` is reserved because the built services object would otherwise be
 // treated as a thenable by `await`, leading to infinite unwrapping.
-type NewKey<
+type UnregisteredKey<
   Key extends string,
   Services extends ServiceMap,
 > = Key extends "then" ? never : Key extends keyof Services ? never : Key;
@@ -26,7 +26,7 @@ type ServiceRegistry<
 > = {
   service: {
     <const Key extends string, Result>(
-      key: NewKey<Key, Services>,
+      key: UnregisteredKey<Key, Services>,
       factory: () => Result,
     ): ServiceRegistry<
       Services & Record<Key, Awaited<Result>>,
@@ -37,7 +37,7 @@ type ServiceRegistry<
       const Deps extends readonly Extract<keyof Services, string>[],
       Result,
     >(
-      key: NewKey<Key, Services>,
+      key: UnregisteredKey<Key, Services>,
       dependencies: Deps,
       factory: (deps: Pick<Services, Deps[number]>) => Result,
     ): ServiceRegistry<
@@ -46,7 +46,7 @@ type ServiceRegistry<
     >;
   };
   value: <const Key extends string, T>(
-    key: NewKey<Key, Services>,
+    key: UnregisteredKey<Key, Services>,
     instance: T,
   ) => ServiceRegistry<
     Services & Record<Key, T>,
@@ -126,7 +126,7 @@ const makeRegistry = <
       // properties instead of triggering the prototype setter, and so they
       // cannot collide with inherited `Object.prototype` members.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- `Object.create(null)` is typed as `any` in lib.dom.
-      const values: ServiceMap = Object.create(null);
+      const services: ServiceMap = Object.create(null);
       const factoryErrors: unknown[] = [];
       const promises = new Map<string, Promise<unknown>>();
 
@@ -137,11 +137,11 @@ const makeRegistry = <
         const promise = (async () => {
           await Promise.all(depPromises);
           const deps = Object.fromEntries(
-            dependencies.map((d) => [d, values[d]]),
+            dependencies.map((d) => [d, services[d]]),
           );
           try {
             const value = await factory(deps);
-            values[key] = value;
+            services[key] = value;
             return value;
           } catch (error) {
             const wrapped = new Error(`Service "${key}" factory failed`, {
@@ -158,20 +158,20 @@ const makeRegistry = <
       await Promise.allSettled(promises.values());
 
       if (factoryErrors.length > 0) {
-        const cleanupErrors = await disposeAll(values, definitions);
+        const cleanupErrors = await disposeAll(services, definitions);
         throwErrors(
           [...factoryErrors, ...cleanupErrors],
-          "Failed to resolve services and cleanup created services",
+          "Failed to resolve services and dispose partial instances",
           { cause: factoryErrors[0] },
         );
       }
 
       let disposed = false;
-      return Object.defineProperty(values, Symbol.asyncDispose, {
+      return Object.defineProperty(services, Symbol.asyncDispose, {
         value: async () => {
           if (disposed) return;
           disposed = true;
-          const errors = await disposeAll(values, definitions);
+          const errors = await disposeAll(services, definitions);
           throwErrors(errors, "Failed to dispose services");
         },
       });
@@ -201,18 +201,18 @@ const isDisposable = (value: unknown): value is Record<symbol, unknown> =>
   value !== null && (typeof value === "object" || typeof value === "function");
 
 const disposeAll = async (
-  values: ServiceMap,
+  services: ServiceMap,
   definitions: readonly ServiceDefinition[],
 ) => {
   const errors: unknown[] = [];
-  const completed = Object.keys(values);
+  const completed = Object.keys(services);
   const dependents = new Map<string, string[]>(
     completed.map((key) => [key, []]),
   );
 
   for (const def of definitions) {
     // Skip incomplete defs so the `!` below holds: a def only reaches
-    // `values[key] = value` after `Promise.all(depPromises)` resolved, which
+    // `services[key] = value` after `Promise.all(depPromises)` resolved, which
     // means every dep is itself completed and present in `dependents`.
     if (!dependents.has(def.key)) continue;
     for (const dep of def.dependencies) {
@@ -232,7 +232,7 @@ const disposeAll = async (
     const promise = (async () => {
       await Promise.all(dependentPromises);
       try {
-        await disposeOne(values[key]);
+        await disposeOne(services[key]);
       } catch (error) {
         errors.push(
           new Error(`Service "${key}" dispose failed`, { cause: error }),

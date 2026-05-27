@@ -202,7 +202,7 @@ describe("createRegistry", () => {
       });
 
     await expect(registry.resolve()).rejects.toThrow(
-      "Failed to resolve services and cleanup created services",
+      "Failed to resolve services and dispose partial instances",
     );
   });
 
