@@ -61,6 +61,56 @@ type ServiceRegistry<
   resolve: () => Promise<Services & AsyncDisposable>;
 };
 
+export class GyakuError extends Error {
+  override name = "GyakuError";
+}
+
+export class RegistryError extends GyakuError {
+  override name = "RegistryError";
+}
+
+export class ServiceFactoryError extends GyakuError {
+  override name = "ServiceFactoryError";
+  readonly key: string;
+
+  constructor(key: string, cause: unknown) {
+    super(`Service "${key}" factory failed`, { cause });
+    this.key = key;
+  }
+}
+
+export class ServiceDisposeError extends GyakuError {
+  override name = "ServiceDisposeError";
+  readonly key: string;
+
+  constructor(key: string, cause: unknown) {
+    super(`Service "${key}" dispose failed`, { cause });
+    this.key = key;
+  }
+}
+
+export class ResolveError extends GyakuError {
+  override name = "ResolveError";
+  readonly errors: readonly (ServiceFactoryError | ServiceDisposeError)[];
+
+  constructor(errors: readonly (ServiceFactoryError | ServiceDisposeError)[]) {
+    const keys = errors.map((e) => e.key).join(", ");
+    super(`Failed to resolve services: ${keys}`, { cause: errors[0] });
+    this.errors = errors;
+  }
+}
+
+export class DisposeError extends GyakuError {
+  override name = "DisposeError";
+  readonly errors: readonly ServiceDisposeError[];
+
+  constructor(errors: readonly ServiceDisposeError[]) {
+    const keys = errors.map((e) => e.key).join(", ");
+    super(`Failed to dispose services: ${keys}`, { cause: errors[0] });
+    this.errors = errors;
+  }
+}
+
 const makeRegistry = <
   Services extends ServiceMap,
   DepsMap extends DepsMapBase<Services>,
@@ -74,10 +124,10 @@ const makeRegistry = <
       maybeServiceFactory?: ServiceFactory,
     ) {
       if (key === "then") {
-        throw new TypeError('Service key "then" is reserved');
+        throw new RegistryError('Service key "then" is reserved');
       }
       if (definitions.some((d) => d.key === key)) {
-        throw new TypeError(`Service "${key}" is already registered`);
+        throw new RegistryError(`Service "${key}" is already registered`);
       }
 
       let dependencies: readonly string[];
@@ -87,7 +137,7 @@ const makeRegistry = <
         factory = factoryOrDeps;
       } else {
         if (typeof maybeServiceFactory !== "function") {
-          throw new TypeError(`Service "${key}" factory is required`);
+          throw new RegistryError(`Service "${key}" factory is required`);
         }
         dependencies = factoryOrDeps;
         factory = maybeServiceFactory;
@@ -96,7 +146,7 @@ const makeRegistry = <
       const registered = new Set(definitions.map((d) => d.key));
       for (const dep of dependencies) {
         if (!registered.has(dep)) {
-          throw new TypeError(
+          throw new RegistryError(
             `Service "${key}" depends on unregistered service "${dep}"`,
           );
         }
@@ -112,7 +162,7 @@ const makeRegistry = <
     override(key: string, factory: ServiceFactory) {
       const index = definitions.findIndex((d) => d.key === key);
       if (index === -1) {
-        throw new TypeError(`Service "${key}" is not registered`);
+        throw new RegistryError(`Service "${key}" is not registered`);
       }
 
       const next = [...definitions];
@@ -127,7 +177,7 @@ const makeRegistry = <
       // cannot collide with inherited `Object.prototype` members.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- `Object.create(null)` is typed as `any` in lib.dom.
       const services: ServiceMap = Object.create(null);
-      const factoryErrors: unknown[] = [];
+      const factoryErrors: ServiceFactoryError[] = [];
       const promises = new Map<string, Promise<unknown>>();
 
       for (const { key, dependencies, factory } of definitions) {
@@ -144,9 +194,7 @@ const makeRegistry = <
             services[key] = value;
             return value;
           } catch (error) {
-            const wrapped = new Error(`Service "${key}" factory failed`, {
-              cause: error,
-            });
+            const wrapped = new ServiceFactoryError(key, error);
             factoryErrors.push(wrapped);
             throw wrapped;
           }
@@ -158,12 +206,8 @@ const makeRegistry = <
       await Promise.allSettled(promises.values());
 
       if (factoryErrors.length > 0) {
-        const cleanupErrors = await disposeAll(services, definitions);
-        throwErrors(
-          [...factoryErrors, ...cleanupErrors],
-          "Failed to resolve services and dispose partial instances",
-          { cause: factoryErrors[0] },
-        );
+        const disposeErrors = await disposeAll(services, definitions);
+        throw new ResolveError([...factoryErrors, ...disposeErrors]);
       }
 
       let disposed = false;
@@ -172,7 +216,9 @@ const makeRegistry = <
           if (disposed) return;
           disposed = true;
           const errors = await disposeAll(services, definitions);
-          throwErrors(errors, "Failed to dispose services");
+          if (errors.length > 0) {
+            throw new DisposeError(errors);
+          }
         },
       });
     },
@@ -187,24 +233,14 @@ export const createRegistry = (): ServiceRegistry<
   Record<never, readonly []>
 > => makeRegistry([]);
 
-const throwErrors = (
-  errors: readonly unknown[],
-  message: string,
-  options?: ErrorOptions,
-): void => {
-  if (errors.length === 0) return;
-  if (errors.length === 1) throw errors[0];
-  throw new AggregateError(errors, message, options);
-};
-
 const isDisposable = (value: unknown): value is Record<symbol, unknown> =>
   value !== null && (typeof value === "object" || typeof value === "function");
 
 const disposeAll = async (
   services: ServiceMap,
   definitions: readonly ServiceDefinition[],
-) => {
-  const errors: unknown[] = [];
+): Promise<ServiceDisposeError[]> => {
+  const errors: ServiceDisposeError[] = [];
   const completed = Object.keys(services);
   const dependents = new Map<string, string[]>(
     completed.map((key) => [key, []]),
@@ -234,9 +270,7 @@ const disposeAll = async (
       try {
         await disposeOne(services[key]);
       } catch (error) {
-        errors.push(
-          new Error(`Service "${key}" dispose failed`, { cause: error }),
-        );
+        errors.push(new ServiceDisposeError(key, error));
       }
     })();
 
