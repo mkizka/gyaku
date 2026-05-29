@@ -1,6 +1,41 @@
 import { describe, expect, it } from "vitest";
 
-import { createRegistry } from "../src/index.ts";
+import {
+  createRegistry,
+  DisposeError,
+  GyakuError,
+  RegistryError,
+  ResolveError,
+  ServiceDisposeError,
+  ServiceFactoryError,
+} from "../src/index.ts";
+
+const capture = (fn: () => unknown): unknown => {
+  try {
+    fn();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+};
+
+const captureAsync = async (
+  fn: () => PromiseLike<unknown>,
+): Promise<unknown> => {
+  try {
+    await fn();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+};
+
+function assertInstance<T>(
+  value: unknown,
+  cls: new (...args: never[]) => T,
+): asserts value is T {
+  expect(value).toBeInstanceOf(cls);
+}
 
 describe("createRegistry", () => {
   it("resolves services eagerly and passes only declared dependencies", async () => {
@@ -123,7 +158,7 @@ describe("createRegistry", () => {
     expect(disposeCount).toBe(1);
   });
 
-  it("keeps disposing after dispose errors and throws an AggregateError", async () => {
+  it("keeps disposing after dispose errors and throws a DisposeError", async () => {
     const disposed: string[] = [];
 
     const registry = createRegistry()
@@ -141,10 +176,29 @@ describe("createRegistry", () => {
       }));
 
     const services = await registry.resolve();
+    const error = await captureAsync(() => services[Symbol.asyncDispose]());
 
-    await expect(services[Symbol.asyncDispose]()).rejects.toThrow(
-      AggregateError,
-    );
+    assertInstance(error, DisposeError);
+    expect(error).toBeInstanceOf(GyakuError);
+    expect(error).toMatchObject({
+      name: "DisposeError",
+      message: "Failed to dispose services: second, first",
+      errors: [
+        {
+          name: "ServiceDisposeError",
+          message: 'Service "second" dispose failed',
+          key: "second",
+          cause: { message: "second dispose failed" },
+        },
+        {
+          name: "ServiceDisposeError",
+          message: 'Service "first" dispose failed',
+          key: "first",
+          cause: { message: "first dispose failed" },
+        },
+      ],
+    });
+    expect(error.cause).toBe(error.errors[0]);
     expect(disposed).toEqual(["second", "first"]);
   });
 
@@ -161,9 +215,7 @@ describe("createRegistry", () => {
         throw new Error("factory failed");
       });
 
-    await expect(registry.resolve()).rejects.toThrow(
-      'Service "second" factory failed',
-    );
+    await expect(registry.resolve()).rejects.toBeInstanceOf(ResolveError);
     expect(disposed).toEqual(["first"]);
   });
 
@@ -184,13 +236,18 @@ describe("createRegistry", () => {
         };
       });
 
-    await expect(registry.resolve()).rejects.toThrow(
-      'Service "dep" factory failed',
-    );
+    const error = await captureAsync(() => registry.resolve());
+    assertInstance(error, ResolveError);
+    expect(error).toMatchObject({
+      errors: [{ key: "dep" }],
+    });
+    expect(error.errors).toHaveLength(1);
+    expect(error.errors[0]).toBeInstanceOf(ServiceFactoryError);
     expect(events).toEqual(["dep"]);
   });
 
-  it("aggregates resolve and cleanup errors", async () => {
+  it("aggregates resolve and cleanup errors into a single ResolveError", async () => {
+    const original = new Error("factory failed");
     const registry = createRegistry()
       .service("first", () => ({
         [Symbol.dispose]: () => {
@@ -198,58 +255,78 @@ describe("createRegistry", () => {
         },
       }))
       .service("second", () => {
-        throw new Error("factory failed");
+        throw original;
       });
 
-    await expect(registry.resolve()).rejects.toThrow(
-      "Failed to resolve services and dispose partial instances",
-    );
+    const error = await captureAsync(() => registry.resolve());
+    assertInstance(error, ResolveError);
+    expect(error).toMatchObject({
+      name: "ResolveError",
+      message: "Failed to resolve services: second, first",
+      cause: {
+        key: "second",
+        message: 'Service "second" factory failed',
+        cause: original,
+      },
+      errors: [
+        { key: "second", message: 'Service "second" factory failed' },
+        { key: "first", message: 'Service "first" dispose failed' },
+      ],
+    });
+    expect(error.cause).toBe(error.errors[0]);
+    expect(error.errors).toHaveLength(2);
+    expect(error.errors[0]).toBeInstanceOf(ServiceFactoryError);
+    expect(error.errors[1]).toBeInstanceOf(ServiceDisposeError);
   });
 
-  it("attaches the first factory error as the aggregate cause", async () => {
-    const registry = createRegistry()
-      .service("first", () => ({
-        [Symbol.dispose]: () => {
-          throw new Error("cleanup failed");
-        },
-      }))
-      .service("second", () => {
-        throw new Error("factory failed");
-      });
-
-    await expect(registry.resolve()).rejects.toMatchObject({
-      cause: {
-        message: 'Service "second" factory failed',
-        cause: { message: "factory failed" },
-      },
+  it(".service rejects the reserved key 'then'", () => {
+    const error = capture(() =>
+      createRegistry()
+        // @ts-expect-error "then" is reserved at the type level too.
+        .service("then", () => undefined),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      name: "RegistryError",
+      message: 'Service key "then" is reserved',
     });
   });
 
-  it("rejects invalid service definitions at runtime", () => {
-    expect(() => {
-      createRegistry()
-        // @ts-expect-error "then" is reserved at the type level too.
-        .service("then", () => undefined);
-    }).toThrow('Service key "then" is reserved');
-
-    expect(() => {
+  it(".service rejects duplicate keys", () => {
+    const error = capture(() =>
       createRegistry()
         .service("logger", () => undefined)
         // @ts-expect-error duplicate keys are rejected at the type level too.
-        .service("logger", () => undefined);
-    }).toThrow('Service "logger" is already registered');
+        .service("logger", () => undefined),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "logger" is already registered',
+    });
+  });
 
-    expect(() => {
+  it(".service rejects unregistered dependencies", () => {
+    const error = capture(() =>
       // @ts-expect-error "db" is not registered at the type level either.
-      createRegistry().service("repo", ["db"], () => undefined);
-    }).toThrow('Service "repo" depends on unregistered service "db"');
+      createRegistry().service("repo", ["db"], () => undefined),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "repo" depends on unregistered service "db"',
+    });
+  });
 
-    expect(() => {
+  it(".service rejects a missing factory", () => {
+    const error = capture(() =>
       createRegistry()
         .service("db", () => undefined)
         // @ts-expect-error missing factory is rejected at the type level too.
-        .service("repo", ["db"]);
-    }).toThrow('Service "repo" factory is required');
+        .service("repo", ["db"]),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "repo" factory is required',
+    });
   });
 
   it("treats __proto__ as a regular key without polluting the prototype", async () => {
@@ -293,26 +370,42 @@ describe("createRegistry", () => {
     expect(services.server.port).toBe(3000);
   });
 
-  it("applies the same key validation to .value as .service", () => {
-    expect(() => {
+  it(".value rejects the reserved key 'then'", () => {
+    const error = capture(() =>
       createRegistry()
         // @ts-expect-error "then" is reserved at the type level too.
-        .value("then", 1);
-    }).toThrow('Service key "then" is reserved');
+        .value("then", 1),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service key "then" is reserved',
+    });
+  });
 
-    expect(() => {
+  it(".value rejects duplicate keys", () => {
+    const error = capture(() =>
       createRegistry()
         .value("config", { port: 3000 })
         // @ts-expect-error duplicate keys are rejected at the type level too.
-        .value("config", { port: 4000 });
-    }).toThrow('Service "config" is already registered');
+        .value("config", { port: 4000 }),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "config" is already registered',
+    });
+  });
 
-    expect(() => {
+  it(".value rejects keys already registered by .service", () => {
+    const error = capture(() =>
       createRegistry()
         .service("logger", () => undefined)
         // @ts-expect-error duplicate keys are rejected at the type level too.
-        .value("logger", { log: () => undefined });
-    }).toThrow('Service "logger" is already registered');
+        .value("logger", { log: () => undefined }),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "logger" is already registered',
+    });
   });
 
   it("replaces a registered factory with .override", async () => {
@@ -387,15 +480,19 @@ describe("createRegistry", () => {
     expect(services.greeting).toBe("second");
   });
 
-  it("rejects overriding an unregistered key at runtime", () => {
+  it("rejects overriding an unregistered key with RegistryError", () => {
     const registry = createRegistry().service("logger", () => ({
       log: (message: string) => message,
     }));
 
-    expect(() => {
+    const error = capture(() =>
       // @ts-expect-error overriding an unregistered key is rejected at the type level too.
-      registry.override("missing", () => undefined);
-    }).toThrow('Service "missing" is not registered');
+      registry.override("missing", () => undefined),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "missing" is not registered',
+    });
   });
 
   it("runs independent factories in parallel", async () => {
@@ -580,40 +677,32 @@ describe("createRegistry", () => {
     expect(events).toEqual(["child-start", "child-end", "parent"]);
   });
 
-  it("reports dispose failures with the documented message", async () => {
-    const registry = createRegistry()
-      .service("first", () => ({
-        [Symbol.dispose]: () => {
-          throw new Error("first dispose failed");
-        },
-      }))
-      .service("second", () => ({
-        [Symbol.dispose]: () => {
-          throw new Error("second dispose failed");
-        },
-      }));
-
-    const services = await registry.resolve();
-
-    await expect(services[Symbol.asyncDispose]()).rejects.toThrow(
-      "Failed to dispose services",
-    );
-  });
-
-  it("wraps factory errors with the service name and preserves the cause", async () => {
+  it("wraps factory failure in ServiceFactoryError", async () => {
     const original = new Error("connect ECONNREFUSED");
 
     const registry = createRegistry().service("db", () => {
       throw original;
     });
 
-    await expect(registry.resolve()).rejects.toMatchObject({
-      message: 'Service "db" factory failed',
-      cause: original,
+    const error = await captureAsync(() => registry.resolve());
+    assertInstance(error, ResolveError);
+    expect(error).toMatchObject({
+      name: "ResolveError",
+      message: "Failed to resolve services: db",
+      errors: [
+        {
+          key: "db",
+          message: 'Service "db" factory failed',
+          cause: original,
+        },
+      ],
     });
+    expect(error.errors).toHaveLength(1);
+    expect(error.errors[0]).toBeInstanceOf(ServiceFactoryError);
+    expect(error.errors[0]).toBeInstanceOf(GyakuError);
   });
 
-  it("wraps dispose errors with the service name and preserves the cause", async () => {
+  it("wraps dispose failure in ServiceDisposeError", async () => {
     const original = new Error("close timed out");
 
     const registry = createRegistry().service("db", () => ({
@@ -623,39 +712,21 @@ describe("createRegistry", () => {
     }));
 
     const services = await registry.resolve();
+    const error = await captureAsync(() => services[Symbol.asyncDispose]());
 
-    await expect(services[Symbol.asyncDispose]()).rejects.toMatchObject({
-      message: 'Service "db" dispose failed',
-      cause: original,
-    });
-  });
-
-  it("includes wrapped dispose errors in the aggregate", async () => {
-    const registry = createRegistry()
-      .service("first", () => ({
-        [Symbol.dispose]: () => {
-          throw new Error("first dispose failed");
-        },
-      }))
-      .service("second", () => ({
-        [Symbol.dispose]: () => {
-          throw new Error("second dispose failed");
-        },
-      }));
-
-    const services = await registry.resolve();
-
-    await expect(services[Symbol.asyncDispose]()).rejects.toMatchObject({
+    assertInstance(error, DisposeError);
+    expect(error).toMatchObject({
+      message: "Failed to dispose services: db",
       errors: [
         {
-          message: 'Service "second" dispose failed',
-          cause: { message: "second dispose failed" },
-        },
-        {
-          message: 'Service "first" dispose failed',
-          cause: { message: "first dispose failed" },
+          key: "db",
+          message: 'Service "db" dispose failed',
+          cause: original,
         },
       ],
     });
+    expect(error.errors).toHaveLength(1);
+    expect(error.errors[0]).toBeInstanceOf(ServiceDisposeError);
+    expect(error.errors[0]).toBeInstanceOf(GyakuError);
   });
 });

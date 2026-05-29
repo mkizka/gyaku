@@ -82,6 +82,30 @@ const testRegistry = productionRegistry.override("db", () => stubDb);
 
 Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
+### Errors
+
+All errors extend `GyakuError`.
+
+- `RegistryError` — invalid argument to `.service` / `.value` / `.override`.
+- `ResolveError` — `.resolve()` failed. `errors` mixes `ServiceFactoryError` and `ServiceDisposeError`.
+- `DisposeError` — `Symbol.asyncDispose` failed. `errors` is `ServiceDisposeError[]`.
+
+Each inner error has `.key` (the service that failed) and `.cause` (the original throw).
+
+```ts
+import { ResolveError, ServiceFactoryError } from "@gyaku/di";
+
+try {
+  await using services = await registry.resolve();
+} catch (error) {
+  if (error instanceof ResolveError) {
+    for (const e of error.errors) {
+      console.error(e.key, e.cause);
+    }
+  }
+}
+```
+
 ### Notes
 
 - Re-registering a key throws; use `.override` to replace.
