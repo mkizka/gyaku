@@ -57,6 +57,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "prettier": {
     "plugins": [
       "prettier-plugin-pkg"
