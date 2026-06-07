@@ -8,9 +8,14 @@ import {
 
 type ServiceMap = Record<string, unknown>;
 
+type RegisteredKey<Services extends ServiceMap> = Extract<
+  keyof Services,
+  string
+>;
+
 type DepsMapBase<Services extends ServiceMap> = Record<
   string,
-  readonly Extract<keyof Services, string>[]
+  readonly RegisteredKey<Services>[]
 >;
 
 type ServiceFactory = (deps: ServiceMap) => unknown;
@@ -42,7 +47,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly Extract<keyof Services, string>[],
+      const Deps extends readonly RegisteredKey<Services>[],
       Result,
     >(
       key: UnregisteredKey<Key, Services>,
@@ -53,6 +58,7 @@ type ServiceRegistry<
       DepsMap & Record<Key, Deps>
     >;
   };
+
   value: <const Key extends string, T>(
     key: UnregisteredKey<Key, Services>,
     instance: T,
@@ -60,12 +66,22 @@ type ServiceRegistry<
     Services & Record<Key, T>,
     DepsMap & Record<Key, readonly []>
   >;
-  override: <const Key extends Extract<keyof Services, string>>(
+
+  replaceService: <const Key extends RegisteredKey<Services>>(
     key: Key,
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
     ) => Services[Key] | Promise<Services[Key]>,
   ) => ServiceRegistry<Services, DepsMap>;
+
+  replaceValue: <const Key extends RegisteredKey<Services>>(
+    key: Key,
+    instance: Services[Key],
+  ) => ServiceRegistry<Services, DepsMap>;
+
+  /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
+  override: ServiceRegistry<Services, DepsMap>["replaceService"];
+
   resolve: () => Promise<Services & AsyncDisposable>;
 };
 
@@ -117,7 +133,7 @@ const makeRegistry = <
       return registry.service(key, () => instance);
     },
 
-    override(key: string, factory: ServiceFactory) {
+    replaceService(key: string, factory: ServiceFactory) {
       const index = definitions.findIndex((d) => d.key === key);
       if (index === -1) {
         throw new RegistryError(`Service "${key}" is not registered`);
@@ -127,6 +143,14 @@ const makeRegistry = <
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- index was just verified to be a valid position in definitions.
       next[index] = { ...next[index]!, factory };
       return makeRegistry(next);
+    },
+
+    replaceValue(key: string, instance: unknown) {
+      return registry.replaceService(key, () => instance);
+    },
+
+    override(key: string, factory: ServiceFactory) {
+      return registry.replaceService(key, factory);
     },
 
     async resolve() {
