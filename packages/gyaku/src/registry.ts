@@ -8,9 +8,14 @@ import {
 
 type ServiceMap = Record<string, unknown>;
 
+type RegisteredKey<Services extends ServiceMap> = Extract<
+  keyof Services,
+  string
+>;
+
 type DepsMapBase<Services extends ServiceMap> = Record<
   string,
-  readonly Extract<keyof Services, string>[]
+  readonly RegisteredKey<Services>[]
 >;
 
 type ServiceFactory = (deps: ServiceMap) => unknown;
@@ -42,7 +47,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly Extract<keyof Services, string>[],
+      const Deps extends readonly RegisteredKey<Services>[],
       Result,
     >(
       key: UnregisteredKey<Key, Services>,
@@ -62,14 +67,14 @@ type ServiceRegistry<
     DepsMap & Record<Key, readonly []>
   >;
 
-  replaceService: <const Key extends Extract<keyof Services, string>>(
+  replaceService: <const Key extends RegisteredKey<Services>>(
     key: Key,
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
     ) => Services[Key] | Promise<Services[Key]>,
   ) => ServiceRegistry<Services, DepsMap>;
 
-  replaceValue: <const Key extends Extract<keyof Services, string>>(
+  replaceValue: <const Key extends RegisteredKey<Services>>(
     key: Key,
     instance: Services[Key],
   ) => ServiceRegistry<Services, DepsMap>;
