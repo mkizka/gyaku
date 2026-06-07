@@ -53,6 +53,7 @@ type ServiceRegistry<
       DepsMap & Record<Key, Deps>
     >;
   };
+
   value: <const Key extends string, T>(
     key: UnregisteredKey<Key, Services>,
     instance: T,
@@ -60,18 +61,22 @@ type ServiceRegistry<
     Services & Record<Key, T>,
     DepsMap & Record<Key, readonly []>
   >;
+
   replaceService: <const Key extends Extract<keyof Services, string>>(
     key: Key,
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
     ) => Services[Key] | Promise<Services[Key]>,
   ) => ServiceRegistry<Services, DepsMap>;
+
   replaceValue: <const Key extends Extract<keyof Services, string>>(
     key: Key,
     instance: Services[Key],
   ) => ServiceRegistry<Services, DepsMap>;
+
   /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
   override: ServiceRegistry<Services, DepsMap>["replaceService"];
+
   resolve: () => Promise<Services & AsyncDisposable>;
 };
 
