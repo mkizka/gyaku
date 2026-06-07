@@ -408,7 +408,7 @@ describe("createRegistry", () => {
     });
   });
 
-  it("replaces a registered factory with .override", async () => {
+  it("replaces a registered factory with .replaceService", async () => {
     const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `prod:${message}`,
@@ -417,7 +417,7 @@ describe("createRegistry", () => {
         query: (sql: string) => logger.log(sql),
       }));
 
-    const testRegistry = registry.override("db", () => ({
+    const testRegistry = registry.replaceService("db", () => ({
       query: (sql: string) => `stub:${sql}`,
     }));
 
@@ -426,7 +426,7 @@ describe("createRegistry", () => {
     expect(services.db.query("select 1")).toBe("stub:select 1");
   });
 
-  it("preserves creation order when overriding", async () => {
+  it("preserves creation order when replacing", async () => {
     const calls: string[] = [];
 
     const registry = createRegistry()
@@ -439,18 +439,18 @@ describe("createRegistry", () => {
         return { tag: "second" as const, first };
       });
 
-    const overridden = registry.override("first", () => {
-      calls.push("first-override");
+    const replaced = registry.replaceService("first", () => {
+      calls.push("first-replaced");
       return { tag: "first" as const };
     });
 
-    await using services = await overridden.resolve();
+    await using services = await replaced.resolve();
 
-    expect(calls).toEqual(["first-override", "second"]);
+    expect(calls).toEqual(["first-replaced", "second"]);
     expect(services.second.first.tag).toBe("first");
   });
 
-  it("inherits the original service's dependencies in .override", async () => {
+  it("inherits the original service's dependencies in .replaceService", async () => {
     const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `log:${message}`,
@@ -459,40 +459,81 @@ describe("createRegistry", () => {
         query: (sql: string) => logger.log(`real:${sql}`),
       }));
 
-    const overridden = registry.override("db", ({ logger }) => ({
-      query: (sql: string) => logger.log(`override:${sql}`),
+    const replaced = registry.replaceService("db", ({ logger }) => ({
+      query: (sql: string) => logger.log(`replaced:${sql}`),
     }));
 
-    await using services = await overridden.resolve();
+    await using services = await replaced.resolve();
 
-    expect(services.db.query("select 1")).toBe("log:override:select 1");
+    expect(services.db.query("select 1")).toBe("log:replaced:select 1");
   });
 
-  it("applies the latest override when called multiple times", async () => {
+  it("applies the latest replacement when called multiple times", async () => {
     const registry = createRegistry().service("greeting", () => "original");
 
-    const overridden = registry
-      .override("greeting", () => "first")
-      .override("greeting", () => "second");
+    const replaced = registry
+      .replaceService("greeting", () => "first")
+      .replaceService("greeting", () => "second");
 
-    await using services = await overridden.resolve();
+    await using services = await replaced.resolve();
 
     expect(services.greeting).toBe("second");
   });
 
-  it("rejects overriding an unregistered key with RegistryError", () => {
+  it("rejects replacing an unregistered key with RegistryError", () => {
     const registry = createRegistry().service("logger", () => ({
       log: (message: string) => message,
     }));
 
     const error = capture(() =>
-      // @ts-expect-error overriding an unregistered key is rejected at the type level too.
-      registry.override("missing", () => undefined),
+      // @ts-expect-error replacing an unregistered key is rejected at the type level too.
+      registry.replaceService("missing", () => undefined),
     );
     expect(error).toBeInstanceOf(RegistryError);
     expect(error).toMatchObject({
       message: 'Service "missing" is not registered',
     });
+  });
+
+  it("replaces a registered service with a pre-built instance via .replaceValue", async () => {
+    const registry = createRegistry()
+      .service("logger", () => ({
+        log: (message: string) => `prod:${message}`,
+      }))
+      .service("db", ["logger"], ({ logger }) => ({
+        query: (sql: string) => logger.log(sql),
+      }));
+
+    const stubDb = { query: (sql: string) => `stub:${sql}` };
+    const testRegistry = registry.replaceValue("db", stubDb);
+
+    await using services = await testRegistry.resolve();
+
+    expect(services.db).toBe(stubDb);
+  });
+
+  it("rejects replacing an unregistered key with .replaceValue", () => {
+    const registry = createRegistry().value("config", { port: 3000 });
+
+    const error = capture(() =>
+      // @ts-expect-error replacing an unregistered key is rejected at the type level too.
+      registry.replaceValue("missing", { port: 4000 }),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "missing" is not registered',
+    });
+  });
+
+  it("keeps the deprecated .override as an alias of .replaceService", async () => {
+    const registry = createRegistry().service("greeting", () => "original");
+
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the deprecated alias must keep working until the next major version.
+    const replaced = registry.override("greeting", () => "replaced");
+
+    await using services = await replaced.resolve();
+
+    expect(services.greeting).toBe("replaced");
   });
 
   it("runs independent factories in parallel", async () => {

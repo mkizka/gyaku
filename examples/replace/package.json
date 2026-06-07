@@ -1,5 +1,5 @@
 {
-  "name": "@gyaku/example-override",
+  "name": "@gyaku/example-replace",
   "private": true,
   "type": "module",
   "scripts": {

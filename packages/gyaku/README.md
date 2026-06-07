@@ -70,12 +70,20 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
-### `.override(key, factory)`
+### `.replaceService(key, factory)`
 
 Swaps a registered factory in place, keeping the original deps and return type.
 
 ```ts
-const testRegistry = productionRegistry.override("db", () => stubDb);
+const testRegistry = productionRegistry.replaceService("db", createStubDb);
+```
+
+### `.replaceValue(key, instance)`
+
+Swaps a registered service with a pre-built instance, keeping the original return type.
+
+```ts
+const testRegistry = productionRegistry.replaceValue("db", stubDb);
 ```
 
 ### `resolve()`
@@ -86,7 +94,7 @@ Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories 
 
 All errors extend `GyakuError`.
 
-- `RegistryError` — invalid argument to `.service` / `.value` / `.override`.
+- `RegistryError` — invalid argument to `.service` / `.value` / `.replaceService` / `.replaceValue`.
 - `ResolveError` — `.resolve()` failed. `errors` mixes `ServiceFactoryError` and `ServiceDisposeError`.
 - `DisposeError` — `Symbol.asyncDispose` failed. `errors` is `ServiceDisposeError[]`.
 
@@ -108,7 +116,7 @@ try {
 
 ### Notes
 
-- Re-registering a key throws; use `.override` to replace.
+- Re-registering a key throws; use `.replaceService` / `.replaceValue` to replace.
 - `then` is reserved (would make the services object look thenable).
 - Services object has a null prototype, so keys like `__proto__` are safe.
 

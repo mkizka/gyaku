@@ -41,16 +41,20 @@ const productionRegistry = createRegistry()
   .service("db", ["logger"], createDb)
   .service("userRepository", ["db"], createUserRepository);
 
-const testRegistry = productionRegistry.override("db", ({ logger }): Db => {
-  const users = new Map<number, User>([[1, { id: 1, name: "stub-alice" }]]);
-  logger.log("stub db ready");
-  return {
-    findUser: async (id) => users.get(id),
-    [Symbol.asyncDispose]: async () => {
-      logger.log("stub db disposed");
-    },
-  };
-});
+const testRegistry = productionRegistry
+  .replaceService("db", ({ logger }): Db => {
+    const users = new Map<number, User>([[1, { id: 1, name: "stub-alice" }]]);
+    logger.log("stub db ready");
+    return {
+      findUser: async (id) => users.get(id),
+      [Symbol.asyncDispose]: async () => {
+        logger.log("stub db disposed");
+      },
+    };
+  })
+  .replaceValue("logger", {
+    log: (message) => console.log(`[test] ${message}`),
+  });
 
 const main = async () => {
   await using app = await testRegistry.resolve();
@@ -61,7 +65,7 @@ const main = async () => {
   const missing = await app.userRepository.find(2);
   assert.equal(missing, undefined);
 
-  console.log("override verified");
+  console.log("replace verified");
 };
 
 await main();

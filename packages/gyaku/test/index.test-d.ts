@@ -163,7 +163,7 @@ describe("ServiceRegistry.resolve", () => {
   });
 });
 
-describe("ServiceRegistry.override", () => {
+describe("ServiceRegistry.replaceService", () => {
   it("inherits the original service's deps shape", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
@@ -172,7 +172,7 @@ describe("ServiceRegistry.override", () => {
         ["logger"],
         ({ logger }): Db => ({ query: (sql) => [logger.log(sql)] }),
       )
-      .override("db", (deps) => {
+      .replaceService("db", (deps) => {
         expectTypeOf(deps).toEqualTypeOf<{ logger: Logger }>();
         return { query: (sql) => [sql] };
       });
@@ -181,31 +181,57 @@ describe("ServiceRegistry.override", () => {
   it("accepts a no-arg factory when the original service had no deps", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
-      .override("logger", () => ({ log: (m) => m }));
+      .replaceService("logger", () => ({ log: (m) => m }));
   });
 
-  it("rejects overriding an unregistered key", () => {
+  it("rejects replacing an unregistered key", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
       // @ts-expect-error "db" has not been registered.
-      .override("db", () => ({ query: () => [] }));
+      .replaceService("db", () => ({ query: () => [] }));
   });
 
   it("rejects an incompatible factory return type", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
       // @ts-expect-error number is not assignable to Logger.
-      .override("logger", () => 42);
+      .replaceService("logger", () => 42);
   });
 
   it("preserves the existing Services type", () => {
     const registry = createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .override("db", () => ({ query: (sql) => [sql] }));
+      .replaceService("db", () => ({ query: (sql) => [sql] }));
 
     expectTypeOf(registry.resolve).returns.toExtend<
       Promise<{ logger: Logger; db: Db } & AsyncDisposable>
     >();
+  });
+});
+
+describe("ServiceRegistry.replaceValue", () => {
+  it("accepts an instance matching the registered type", () => {
+    const registry = createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .replaceValue("logger", { log: (m: string) => m });
+
+    expectTypeOf(registry.resolve).returns.toExtend<
+      Promise<{ logger: Logger } & AsyncDisposable>
+    >();
+  });
+
+  it("rejects replacing an unregistered key", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      // @ts-expect-error "db" has not been registered.
+      .replaceValue("db", { query: () => [] });
+  });
+
+  it("rejects an incompatible instance type", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      // @ts-expect-error number is not assignable to Logger.
+      .replaceValue("logger", 42);
   });
 });
