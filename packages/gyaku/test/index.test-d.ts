@@ -208,6 +208,68 @@ describe("ServiceRegistry.replaceService", () => {
       Promise<{ logger: Logger; db: Db } & AsyncDisposable>
     >();
   });
+
+  it("widens the service type to the replacement's extra members", async () => {
+    const services = await createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceService("db", () => ({
+        query: (sql: string) => [sql],
+        add: (row: string) => [row],
+      }))
+      .resolve();
+
+    expectTypeOf(services.db.add).toEqualTypeOf<(row: string) => string[]>();
+    expectTypeOf(services.db.query).toEqualTypeOf<(sql: string) => string[]>();
+  });
+
+  it("widens the service type across repeated replacements", async () => {
+    const services = await createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceService("db", () => ({
+        query: (sql: string) => [sql],
+        add: (row: string) => [row],
+      }))
+      .replaceService("db", () => ({
+        query: (sql: string) => [sql],
+        add: (row: string) => [row],
+        clear: () => undefined,
+      }))
+      .resolve();
+
+    expectTypeOf(services.db.add).toEqualTypeOf<(row: string) => string[]>();
+    expectTypeOf(services.db.clear).toEqualTypeOf<() => undefined>();
+  });
+
+  it("rejects a replacement that drops the current type's members", () => {
+    createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceService("db", () => ({
+        query: (sql: string) => [sql],
+        add: (row: string) => [row],
+      }))
+      // @ts-expect-error missing `add`, which the previous replacement added.
+      .replaceService("db", () => ({ query: (sql: string) => [sql] }));
+  });
+
+  it("unwraps a Promise replacement and keeps its extra members", () => {
+    const registry = createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceService("db", () =>
+        Promise.resolve({
+          query: (sql: string) => [sql],
+          add: (row: string) => [row],
+        }),
+      );
+
+    expectTypeOf(registry.resolve).returns.toExtend<
+      Promise<{
+        db: {
+          query: (sql: string) => string[];
+          add: (row: string) => string[];
+        };
+      }>
+    >();
+  });
 });
 
 describe("ServiceRegistry.replaceValue", () => {
@@ -233,5 +295,21 @@ describe("ServiceRegistry.replaceValue", () => {
       .service("logger", (): Logger => ({ log: (m) => m }))
       // @ts-expect-error number is not assignable to Logger.
       .replaceValue("logger", 42);
+  });
+
+  it("widens the service type to the instance's extra members", async () => {
+    const rows: string[] = [];
+    const stub = {
+      query: (sql: string) => [sql],
+      rows,
+    };
+
+    const services = await createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceValue("db", stub)
+      .resolve();
+
+    expectTypeOf(services.db.rows).toEqualTypeOf<string[]>();
+    expectTypeOf(services.db.query).toEqualTypeOf<(sql: string) => string[]>();
   });
 });

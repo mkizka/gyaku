@@ -469,11 +469,16 @@ describe("createRegistry", () => {
   });
 
   it("applies the latest replacement when called multiple times", async () => {
-    const registry = createRegistry().service("greeting", () => "original");
+    // Annotated as `string` so the first replacement doesn't narrow `greeting`
+    // to the `"first"` literal, which the second replacement would then fail.
+    const registry = createRegistry().service(
+      "greeting",
+      (): string => "original",
+    );
 
     const replaced = registry
-      .replaceService("greeting", () => "first")
-      .replaceService("greeting", () => "second");
+      .replaceService("greeting", (): string => "first")
+      .replaceService("greeting", (): string => "second");
 
     await using services = await replaced.resolve();
 
