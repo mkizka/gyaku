@@ -43,6 +43,11 @@ type ServiceDefinition = {
 type ServiceRegistry<
   Services extends ServiceMap,
   DepsMap extends DepsMapBase,
+  // Original registration type per key. `replaceService` judges replacements
+  // against this rather than the current `Services`, so a replacement is always
+  // checked against the original contract — keeping dependents safe and letting
+  // the same key be replaced repeatedly without each step narrowing the next.
+  BaseMap extends ServiceMap,
 > = {
   service: {
     <const Key extends string, Result>(
@@ -50,7 +55,8 @@ type ServiceRegistry<
       factory: () => Result,
     ): ServiceRegistry<
       Services & Record<Key, Awaited<Result>>,
-      DepsMap & Record<Key, readonly []>
+      DepsMap & Record<Key, readonly []>,
+      BaseMap & Record<Key, Awaited<Result>>
     >;
     <
       const Key extends string,
@@ -62,7 +68,8 @@ type ServiceRegistry<
       factory: (deps: Pick<Services, Deps[number]>) => Result,
     ): ServiceRegistry<
       Services & Record<Key, Awaited<Result>>,
-      DepsMap & Record<Key, Deps>
+      DepsMap & Record<Key, Deps>,
+      BaseMap & Record<Key, Awaited<Result>>
     >;
   };
 
@@ -71,38 +78,41 @@ type ServiceRegistry<
     instance: T,
   ) => ServiceRegistry<
     Services & Record<Key, T>,
-    DepsMap & Record<Key, readonly []>
+    DepsMap & Record<Key, readonly []>,
+    BaseMap & Record<Key, T>
   >;
 
-  // The result must extend the current type, so repeated replacements widen the
-  // service type rather than narrowing it.
   replaceService: <
     const Key extends RegisteredKey<Services>,
-    Result extends Services[Key],
+    Result extends BaseMap[Key],
   >(
     key: Key,
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
     ) => Result | Promise<Result>,
-  ) => ServiceRegistry<ReplaceValue<Services, Key, Result>, DepsMap>;
+  ) => ServiceRegistry<ReplaceValue<Services, Key, Result>, DepsMap, BaseMap>;
 
   replaceValue: <
     const Key extends RegisteredKey<Services>,
-    T extends Services[Key],
+    T extends BaseMap[Key],
   >(
     key: Key,
     instance: T,
-  ) => ServiceRegistry<ReplaceValue<Services, Key, T>, DepsMap>;
+  ) => ServiceRegistry<ReplaceValue<Services, Key, T>, DepsMap, BaseMap>;
 
   /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
-  override: ServiceRegistry<Services, DepsMap>["replaceService"];
+  override: ServiceRegistry<Services, DepsMap, BaseMap>["replaceService"];
 
   resolve: () => Promise<Services & AsyncDisposable>;
 };
 
-const makeRegistry = <Services extends ServiceMap, DepsMap extends DepsMapBase>(
+const makeRegistry = <
+  Services extends ServiceMap,
+  DepsMap extends DepsMapBase,
+  BaseMap extends ServiceMap,
+>(
   definitions: readonly ServiceDefinition[],
-): ServiceRegistry<Services, DepsMap> => {
+): ServiceRegistry<Services, DepsMap, BaseMap> => {
   const registry = {
     service(
       key: string,
@@ -219,12 +229,13 @@ const makeRegistry = <Services extends ServiceMap, DepsMap extends DepsMapBase>(
   };
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The structural registry satisfies the overloaded ServiceRegistry type at runtime.
-  return registry as unknown as ServiceRegistry<Services, DepsMap>;
+  return registry as unknown as ServiceRegistry<Services, DepsMap, BaseMap>;
 };
 
 export const createRegistry = (): ServiceRegistry<
   Record<never, never>,
-  Record<never, readonly []>
+  Record<never, readonly []>,
+  Record<never, never>
 > => makeRegistry([]);
 
 const isDisposable = (value: unknown): value is Record<symbol, unknown> =>

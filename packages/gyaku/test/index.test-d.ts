@@ -222,33 +222,29 @@ describe("ServiceRegistry.replaceService", () => {
     expectTypeOf(services.db.query).toEqualTypeOf<(sql: string) => string[]>();
   });
 
-  it("widens the service type across repeated replacements", async () => {
+  it("judges each replacement against the original type, not the previous one", async () => {
     const services = await createRegistry()
       .service("db", (): Db => ({ query: (sql) => [sql] }))
       .replaceService("db", () => ({
         query: (sql: string) => [sql],
         add: (row: string) => [row],
       }))
+      // Only needs to satisfy the original `Db`, not the previous stub's `add`.
       .replaceService("db", () => ({
         query: (sql: string) => [sql],
-        add: (row: string) => [row],
         clear: () => undefined,
       }))
       .resolve();
 
-    expectTypeOf(services.db.add).toEqualTypeOf<(row: string) => string[]>();
     expectTypeOf(services.db.clear).toEqualTypeOf<() => undefined>();
+    expectTypeOf(services.db).not.toHaveProperty("add");
   });
 
-  it("rejects a replacement that drops the current type's members", () => {
+  it("rejects a replacement that drops the original contract", () => {
     createRegistry()
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .replaceService("db", () => ({
-        query: (sql: string) => [sql],
-        add: (row: string) => [row],
-      }))
-      // @ts-expect-error missing `add`, which the previous replacement added.
-      .replaceService("db", () => ({ query: (sql: string) => [sql] }));
+      // @ts-expect-error missing `query`, so it is not assignable to Db.
+      .replaceService("db", () => ({ add: (row: string) => [row] }));
   });
 
   it("unwraps a Promise replacement and keeps its extra members", () => {
