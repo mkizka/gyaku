@@ -41,11 +41,15 @@ const productionRegistry = createRegistry()
   .service("db", ["logger"], createDb)
   .service("userRepository", ["db"], createUserRepository);
 
-const createStubDb = ({ logger }: { logger: Logger }): Db => {
-  const users = new Map<number, User>([[1, { id: 1, name: "stub-alice" }]]);
+// Returns more than `Db`: `replaceService` widens the service type, so the
+// extra `seed`/`clear` are callable on the resolved service.
+const createStubDb = ({ logger }: { logger: Logger }) => {
+  const users = new Map<number, User>();
   logger.log("stub db ready");
   return {
-    findUser: async (id) => users.get(id),
+    findUser: async (id: number) => users.get(id),
+    seed: (user: User) => users.set(user.id, user),
+    clear: () => users.clear(),
     [Symbol.asyncDispose]: async () => {
       logger.log("stub db disposed");
     },
@@ -63,11 +67,16 @@ const testRegistry = productionRegistry
 const main = async () => {
   await using app = await testRegistry.resolve();
 
+  app.db.seed({ id: 1, name: "stub-alice" });
+
   const alice = await app.userRepository.find(1);
   assert.deepEqual(alice, { id: 1, name: "stub-alice" });
 
   const missing = await app.userRepository.find(2);
   assert.equal(missing, undefined);
+
+  app.db.clear();
+  assert.equal(await app.userRepository.find(1), undefined);
 
   console.log("replace verified");
 };

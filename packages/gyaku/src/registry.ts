@@ -13,10 +13,17 @@ type RegisteredKey<Services extends ServiceMap> = Extract<
   string
 >;
 
-type DepsMapBase<Services extends ServiceMap> = Record<
-  string,
-  readonly RegisteredKey<Services>[]
->;
+// Kept independent of `Services` on purpose: a `DepsMapBase<Services>` form
+// would be re-checked whenever `replaceService` rewrites `Services`, and fail.
+type DepsMapBase = Record<string, readonly string[]>;
+
+type ReplaceValue<
+  Services extends ServiceMap,
+  Key extends keyof Services,
+  Result,
+> = {
+  [K in keyof Services]: K extends Key ? Result : Services[K];
+};
 
 type ServiceFactory = (deps: ServiceMap) => unknown;
 
@@ -35,7 +42,7 @@ type ServiceDefinition = {
 
 type ServiceRegistry<
   Services extends ServiceMap,
-  DepsMap extends DepsMapBase<Services>,
+  DepsMap extends DepsMapBase,
 > = {
   service: {
     <const Key extends string, Result>(
@@ -67,17 +74,25 @@ type ServiceRegistry<
     DepsMap & Record<Key, readonly []>
   >;
 
-  replaceService: <const Key extends RegisteredKey<Services>>(
+  // The result must extend the current type, so repeated replacements widen the
+  // service type rather than narrowing it.
+  replaceService: <
+    const Key extends RegisteredKey<Services>,
+    Result extends Services[Key],
+  >(
     key: Key,
     factory: (
       deps: Pick<Services, DepsMap[Key][number]>,
-    ) => Services[Key] | Promise<Services[Key]>,
-  ) => ServiceRegistry<Services, DepsMap>;
+    ) => Result | Promise<Result>,
+  ) => ServiceRegistry<ReplaceValue<Services, Key, Result>, DepsMap>;
 
-  replaceValue: <const Key extends RegisteredKey<Services>>(
+  replaceValue: <
+    const Key extends RegisteredKey<Services>,
+    T extends Services[Key],
+  >(
     key: Key,
-    instance: Services[Key],
-  ) => ServiceRegistry<Services, DepsMap>;
+    instance: T,
+  ) => ServiceRegistry<ReplaceValue<Services, Key, T>, DepsMap>;
 
   /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
   override: ServiceRegistry<Services, DepsMap>["replaceService"];
@@ -85,10 +100,7 @@ type ServiceRegistry<
   resolve: () => Promise<Services & AsyncDisposable>;
 };
 
-const makeRegistry = <
-  Services extends ServiceMap,
-  DepsMap extends DepsMapBase<Services>,
->(
+const makeRegistry = <Services extends ServiceMap, DepsMap extends DepsMapBase>(
   definitions: readonly ServiceDefinition[],
 ): ServiceRegistry<Services, DepsMap> => {
   const registry = {
