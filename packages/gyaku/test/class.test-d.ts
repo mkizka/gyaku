@@ -58,7 +58,7 @@ describe("asClass", () => {
 });
 
 describe("asClassArgs", () => {
-  it("zips keys with positional constructor parameters", () => {
+  it("infers the instance type from the constructor", () => {
     class Repo {
       logger: Logger;
       db: Db;
@@ -68,30 +68,8 @@ describe("asClassArgs", () => {
       }
     }
 
-    const factory = asClassArgs(Repo, ["logger", "db"]);
-    expectTypeOf(factory).parameter(0).toEqualTypeOf<{
-      logger: Logger;
-      db: Db;
-    }>();
+    const factory = asClassArgs(Repo);
     expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
-  });
-
-  it("maps each key to the parameter at the same position", () => {
-    class Repo {
-      db: Db;
-      logger: Logger;
-      constructor(db: Db, logger: Logger) {
-        this.db = db;
-        this.logger = logger;
-      }
-    }
-
-    // Keys follow the parameter order: first the Db parameter, then Logger.
-    const factory = asClassArgs(Repo, ["db", "logger"]);
-    expectTypeOf(factory).parameter(0).toEqualTypeOf<{
-      db: Db;
-      logger: Logger;
-    }>();
   });
 
   it("registers a positional-constructor class via .service", async () => {
@@ -110,52 +88,9 @@ describe("asClassArgs", () => {
     const services = await createRegistry()
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["logger", "db"], asClassArgs(Repo, ["logger", "db"]))
+      .service("repo", ["logger", "db"], asClassArgs(Repo))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();
-  });
-
-  it("rejects a key list shorter than the constructor parameters", () => {
-    class Repo {
-      logger: Logger;
-      db: Db;
-      constructor(logger: Logger, db: Db) {
-        this.logger = logger;
-        this.db = db;
-      }
-    }
-
-    // @ts-expect-error one key per constructor parameter is required.
-    asClassArgs(Repo, ["logger"]);
-  });
-
-  it("rejects a key list longer than the constructor parameters", () => {
-    class Repo {
-      logger: Logger;
-      constructor(logger: Logger) {
-        this.logger = logger;
-      }
-    }
-
-    // @ts-expect-error one key per constructor parameter is required.
-    asClassArgs(Repo, ["logger", "db"]);
-  });
-
-  it("rejects a dependency whose type does not match the parameter", () => {
-    class Repo {
-      logger: Logger;
-      db: Db;
-      constructor(logger: Logger, db: Db) {
-        this.logger = logger;
-        this.db = db;
-      }
-    }
-
-    createRegistry()
-      .service("logger", (): Logger => ({ log: () => undefined }))
-      .service("db", () => 42)
-      // @ts-expect-error number is not assignable to the Db parameter.
-      .service("repo", ["logger", "db"], asClassArgs(Repo, ["logger", "db"]));
   });
 });

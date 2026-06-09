@@ -33,33 +33,17 @@ export const asClass =
   (deps) =>
     new Ctor(deps);
 
-type Prettify<T> = { [K in keyof T]: T[K] } & {};
-
-// Zips a tuple of dependency keys together with the constructor's parameter
-// types into the dependency object the produced factory accepts. Recursing in
-// lockstep keeps each key paired with the parameter at the same position.
-type ZipToObject<
-  Keys extends readonly PropertyKey[],
-  Args extends readonly unknown[],
-> = Keys extends readonly [
-  infer Key extends PropertyKey,
-  ...infer KeyRest extends readonly PropertyKey[],
-]
-  ? Args extends readonly [
-      infer Arg,
-      ...infer ArgRest extends readonly unknown[],
-    ]
-    ? { [P in Key]: Arg } & ZipToObject<KeyRest, ArgRest>
-    : Record<never, never>
-  : Record<never, never>;
-
 /**
- * Adapts a class whose constructor takes positional arguments, mapping the
- * named dependencies to constructor parameters in the given order.
+ * Adapts a class whose constructor takes positional arguments, spreading the
+ * resolved dependencies into the constructor in the order they are listed in
+ * `.service`'s `deps` argument.
  *
- * `keys` must list exactly one dependency name per constructor parameter; its
- * length is checked against the constructor at compile time, and each declared
- * dependency's type is matched against the parameter at the same position.
+ * Unlike {@link asClass}, the constructor parameters are NOT matched against
+ * the declared dependencies at compile time — only the instance type is
+ * inferred. Make sure `deps` lists exactly the constructor's parameters, in
+ * order. (The values are read with `Object.values`, which follows the deps
+ * object's key order; keep service keys as ordinary identifiers, not
+ * integer-like strings such as `"0"`, whose ordering JavaScript reshuffles.)
  *
  * @example
  * ```ts
@@ -75,19 +59,14 @@ type ZipToObject<
  * createRegistry()
  *   .service("logger", () => new Logger())
  *   .service("db", ["logger"], Db.create)
- *   .service("greeter", ["logger", "db"], asClassArgs(Greeter, ["logger", "db"]));
+ *   // deps order ["logger", "db"] maps to constructor(logger, db).
+ *   .service("greeter", ["logger", "db"], asClassArgs(Greeter));
  * ```
  */
-export const asClassArgs = <
-  Args extends readonly unknown[],
-  const Keys extends { readonly [I in keyof Args]: PropertyKey },
-  Instance,
->(
-  Ctor: new (...args: Args) => Instance,
-  keys: Keys,
-): ((deps: Prettify<ZipToObject<Keys, Args>>) => Instance) => {
-  const build = (deps: Record<PropertyKey, unknown>): Instance =>
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- `keys` mirrors the constructor parameters by construction; its length is checked against `Args` at the call site.
-    new Ctor(...(keys.map((key) => deps[key]) as unknown as Args));
-  return build;
-};
+export const asClassArgs =
+  <Instance>(
+    Ctor: new (...args: never[]) => Instance,
+  ): ((deps: Record<string, unknown>) => Instance) =>
+  (deps) =>
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- `deps` is built in the order declared in `.service`, which the caller aligns with the constructor parameters.
+    new Ctor(...(Object.values(deps) as never[]));

@@ -50,9 +50,7 @@ describe("asClass", () => {
 });
 
 describe("asClassArgs", () => {
-  it("maps named dependencies to positional constructor arguments", async () => {
-    const order: string[] = [];
-
+  it("spreads resolved dependencies into positional constructor args in deps order", async () => {
     class Db {
       query(sql: string) {
         return [sql];
@@ -63,7 +61,6 @@ describe("asClassArgs", () => {
       readonly #logger: Logger;
       readonly #db: Db;
       constructor(logger: Logger, db: Db) {
-        order.push("logger", "db");
         this.#logger = logger;
         this.#db = db;
       }
@@ -76,16 +73,15 @@ describe("asClassArgs", () => {
     await using services = await createRegistry()
       .service("logger", () => new Logger())
       .service("db", () => new Db())
-      .service("repo", ["logger", "db"], asClassArgs(Repo, ["logger", "db"]))
+      .service("repo", ["logger", "db"], asClassArgs(Repo))
       .resolve();
 
     expect(services.repo).toBeInstanceOf(Repo);
     expect(services.repo.find("select 1")).toEqual(["select 1"]);
     expect(services.logger.lines).toEqual(["select 1"]);
-    expect(order).toEqual(["logger", "db"]);
   });
 
-  it("respects the key order rather than the declared dependency order", async () => {
+  it("follows the deps array order, not the registration order", async () => {
     class Pair {
       readonly first: string;
       readonly second: string;
@@ -98,8 +94,8 @@ describe("asClassArgs", () => {
     await using services = await createRegistry()
       .value("a", "value-a")
       .value("b", "value-b")
-      // Reverse the order so it cannot accidentally match the registry order.
-      .service("pair", ["a", "b"], asClassArgs(Pair, ["b", "a"]))
+      // deps order ["b", "a"] maps to constructor(first = b, second = a).
+      .service("pair", ["b", "a"], asClassArgs(Pair))
       .resolve();
 
     expect(services.pair.first).toBe("value-b");

@@ -54,8 +54,9 @@ class Greeter {
   }
 }
 
-// Positional-argument constructor: `asClassArgs` maps deps to parameters in
-// the listed order, so existing classes can be registered unchanged.
+// Positional-argument constructor: `asClassArgs` spreads deps into the
+// parameters in the order listed in `.service`, so existing classes can be
+// registered unchanged.
 class Farewell {
   #logger: Logger;
   #db: Db;
@@ -76,11 +77,7 @@ const registry = createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], Db.create)
   .service("greeter", ["logger", "db"], asClass(Greeter))
-  .service(
-    "farewell",
-    ["logger", "db"],
-    asClassArgs(Farewell, ["logger", "db"]),
-  );
+  .service("farewell", ["logger", "db"], asClassArgs(Farewell));
 
 const main = async () => {
   await using app = await registry.resolve();
