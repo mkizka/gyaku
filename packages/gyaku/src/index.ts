@@ -1,3 +1,4 @@
+export { asClass } from "./class.js";
 export {
   DisposeError,
   GyakuError,

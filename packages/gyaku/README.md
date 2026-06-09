@@ -90,6 +90,34 @@ const testRegistry = productionRegistry.replaceValue("db", stubDb);
 
 Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
+### `asClass(Class)` / `asClass(Class, { positional: true })`
+
+Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. The default form takes a single deps object and stays fully type-safe.
+
+```ts
+class Greeter {
+  constructor(private deps: { logger: Logger }) {}
+}
+
+createRegistry()
+  .service("logger", () => new Logger())
+  .service("greeter", ["logger"], asClass(Greeter));
+```
+
+With `{ positional: true }`, deps are spread into a positional constructor in `deps` order. Only the instance type is inferred, so `deps` must list the constructor's parameters in order.
+
+```ts
+class Greeter {
+  constructor(logger: Logger, db: Db) {}
+}
+
+createRegistry().service(
+  "greeter",
+  ["logger", "db"],
+  asClass(Greeter, { positional: true }),
+);
+```
+
 ### Errors
 
 All errors extend `GyakuError`.
@@ -119,6 +147,7 @@ try {
 - Re-registering a key throws; use `.replaceService` / `.replaceValue` to replace.
 - `then` is reserved (would make the services object look thenable).
 - Services object has a null prototype, so keys like `__proto__` are safe.
+- `asClass(Class, { positional: true })` infers only the instance type — it does not check that `deps` matches the constructor's parameters.
 
 ## License
 
