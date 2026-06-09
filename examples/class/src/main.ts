@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createRegistry } from "@gyaku/di";
+import { asClass, asClassArgs, createRegistry } from "@gyaku/di";
 
 class Logger {
   log(message: string) {
@@ -15,6 +15,8 @@ class Db {
     this.#logger = logger;
   }
 
+  // Async setup belongs in a static factory: it already receives the deps
+  // object gyaku passes, so it needs no helper.
   static async create({ logger }: { logger: Logger }) {
     await new Promise((resolve) => setTimeout(resolve, 10));
     logger.log("db connected");
@@ -31,11 +33,12 @@ class Db {
   }
 }
 
+// Object-argument constructor: `asClass` passes the resolved deps straight in.
 class Greeter {
   #logger: Logger;
   #db: Db;
 
-  constructor(logger: Logger, db: Db) {
+  constructor({ logger, db }: { logger: Logger; db: Db }) {
     this.#logger = logger;
     this.#db = db;
   }
@@ -51,20 +54,44 @@ class Greeter {
   }
 }
 
+// Positional-argument constructor: `asClassArgs` maps deps to parameters in
+// the listed order, so existing classes can be registered unchanged.
+class Farewell {
+  #logger: Logger;
+  #db: Db;
+
+  constructor(logger: Logger, db: Db) {
+    this.#logger = logger;
+    this.#db = db;
+  }
+
+  async say(id: number) {
+    const name = await this.#db.findName(id);
+    this.#logger.log(`saying bye to ${name}`);
+    return `bye, ${name}!`;
+  }
+}
+
 const registry = createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], Db.create)
+  .service("greeter", ["logger", "db"], asClass(Greeter))
   .service(
-    "greeter",
+    "farewell",
     ["logger", "db"],
-    ({ logger, db }: { logger: Logger; db: Db }) => new Greeter(logger, db),
+    asClassArgs(Farewell, ["logger", "db"]),
   );
 
 const main = async () => {
   await using app = await registry.resolve();
-  const message = await app.greeter.say(1);
-  assert.equal(message, "hello, user-1!");
-  console.log(message);
+
+  const hello = await app.greeter.say(1);
+  assert.equal(hello, "hello, user-1!");
+  console.log(hello);
+
+  const bye = await app.farewell.say(1);
+  assert.equal(bye, "bye, user-1!");
+  console.log(bye);
 };
 
 await main();

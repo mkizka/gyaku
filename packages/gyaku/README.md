@@ -70,6 +70,49 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
+### `asClass(Class)` / `asClassArgs(Class, keys)`
+
+Helpers for migrating class-based DI. They adapt a class constructor into a factory so existing classes can be registered without a hand-written `(deps) => new Foo(...)` wrapper.
+
+Use `asClass` when the constructor takes a single dependency object:
+
+```ts
+import { asClass, createRegistry } from "@gyaku/di";
+
+class Greeter {
+  #logger: Logger;
+  constructor({ logger }: { logger: Logger }) {
+    this.#logger = logger;
+  }
+}
+
+createRegistry()
+  .service("logger", () => new Logger())
+  .service("greeter", ["logger"], asClass(Greeter));
+```
+
+Use `asClassArgs` when the constructor takes positional arguments. `keys` lists one dependency name per parameter, in order; its length and each parameter's type are checked at compile time.
+
+```ts
+import { asClassArgs, createRegistry } from "@gyaku/di";
+
+class Greeter {
+  #logger: Logger;
+  #db: Db;
+  constructor(logger: Logger, db: Db) {
+    this.#logger = logger;
+    this.#db = db;
+  }
+}
+
+createRegistry()
+  .service("logger", () => new Logger())
+  .service("db", ["logger"], createDb)
+  .service("greeter", ["logger", "db"], asClassArgs(Greeter, ["logger", "db"]));
+```
+
+For async setup, prefer a static factory (`static create(deps)`) that returns the instance — it already matches the factory shape, so no helper is needed.
+
 ### `.replaceService(key, factory)`
 
 Swaps a registered factory in place, keeping the original deps and return type.
