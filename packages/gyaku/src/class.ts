@@ -1,16 +1,7 @@
-// Adapts a class constructor into a `.service` factory, so class-based code can
-// migrate without a hand-written `(deps) => new Foo(...)` wrapper.
-
-/** Adapts a class whose constructor takes a single deps object. Fully type-safe. */
 export function asClass<Deps extends object, Instance>(
   Ctor: new (deps: Deps) => Instance,
 ): (deps: Deps) => Instance;
 
-/**
- * Adapts a class whose constructor takes positional arguments, spreading the
- * deps in `.service`'s declared order. Only the instance type is inferred, so
- * `deps` must list the constructor's parameters in order.
- */
 export function asClass<Instance>(
   Ctor: new (...args: never[]) => Instance,
   options: { positional: true },
