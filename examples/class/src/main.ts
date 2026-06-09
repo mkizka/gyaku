@@ -15,7 +15,6 @@ class Db {
     this.#logger = logger;
   }
 
-  // Async setup uses a static factory — it already takes the deps object.
   static async create({ logger }: { logger: Logger }) {
     await new Promise((resolve) => setTimeout(resolve, 10));
     logger.log("db connected");
@@ -52,7 +51,6 @@ class Greeter {
   }
 }
 
-// Positional-argument constructor: `{ positional: true }` spreads deps in order.
 class Farewell {
   #logger: Logger;
   #db: Db;
