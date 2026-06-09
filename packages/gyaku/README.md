@@ -70,6 +70,26 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
+### `.replaceService(key, factory)`
+
+Swaps a registered factory in place, keeping the original deps and return type.
+
+```ts
+const testRegistry = productionRegistry.replaceService("db", createStubDb);
+```
+
+### `.replaceValue(key, instance)`
+
+Swaps a registered service with a pre-built instance, keeping the original return type.
+
+```ts
+const testRegistry = productionRegistry.replaceValue("db", stubDb);
+```
+
+### `resolve()`
+
+Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
+
 ### `asClass(Class)` / `asClass(Class, { positional: true })`
 
 Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. The default form takes a single deps object and stays fully type-safe.
@@ -97,26 +117,6 @@ createRegistry().service(
   asClass(Greeter, { positional: true }),
 );
 ```
-
-### `.replaceService(key, factory)`
-
-Swaps a registered factory in place, keeping the original deps and return type.
-
-```ts
-const testRegistry = productionRegistry.replaceService("db", createStubDb);
-```
-
-### `.replaceValue(key, instance)`
-
-Swaps a registered service with a pre-built instance, keeping the original return type.
-
-```ts
-const testRegistry = productionRegistry.replaceValue("db", stubDb);
-```
-
-### `resolve()`
-
-Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
 ### Errors
 
