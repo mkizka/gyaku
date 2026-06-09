@@ -72,18 +72,11 @@ const registry = createRegistry()
 
 ### `asClass(Class)` / `asClass(Class, { positional: true })`
 
-Helper for migrating class-based DI. It adapts a class constructor into a factory so existing classes can be registered without a hand-written `(deps) => new Foo(...)` wrapper.
-
-By default, `asClass` is for constructors that take a single dependency object. The resolved deps are passed straight in, so it stays fully type-safe — missing or mistyped dependencies are caught at compile time.
+Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. The default form takes a single deps object and stays fully type-safe.
 
 ```ts
-import { asClass, createRegistry } from "@gyaku/di";
-
 class Greeter {
-  #logger: Logger;
-  constructor({ logger }: { logger: Logger }) {
-    this.#logger = logger;
-  }
+  constructor(private deps: { logger: Logger }) {}
 }
 
 createRegistry()
@@ -91,29 +84,19 @@ createRegistry()
   .service("greeter", ["logger"], asClass(Greeter));
 ```
 
-Pass `{ positional: true }` when the constructor takes positional arguments. The deps are spread into the constructor in the order listed in `.service`, so no extra key list is needed.
+With `{ positional: true }`, deps are spread into a positional constructor in `deps` order. Only the instance type is inferred, so `deps` must list the constructor's parameters in order.
 
 ```ts
 class Greeter {
-  #logger: Logger;
-  #db: Db;
-  constructor(logger: Logger, db: Db) {
-    this.#logger = logger;
-    this.#db = db;
-  }
+  constructor(logger: Logger, db: Db) {}
 }
 
-createRegistry()
-  .service("logger", () => new Logger())
-  .service("db", ["logger"], createDb)
-  // deps order ["logger", "db"] maps to constructor(logger, db).
-  .service("greeter", ["logger", "db"], asClass(Greeter, { positional: true }));
+createRegistry().service(
+  "greeter",
+  ["logger", "db"],
+  asClass(Greeter, { positional: true }),
+);
 ```
-
-> [!NOTE]
-> With `{ positional: true }`, `asClass` only infers the instance type — it does **not** check the constructor's parameters against the declared dependencies. Make sure `deps` lists exactly the constructor's parameters, in order. Keep service keys as ordinary identifiers (not integer-like strings such as `"0"`), since the values are read positionally with `Object.values`.
-
-For async setup, prefer a static factory (`static create(deps)`) that returns the instance — it already matches the factory shape, so no helper is needed.
 
 ### `.replaceService(key, factory)`
 

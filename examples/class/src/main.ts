@@ -15,8 +15,7 @@ class Db {
     this.#logger = logger;
   }
 
-  // Async setup belongs in a static factory: it already receives the deps
-  // object gyaku passes, so it needs no helper.
+  // Async setup uses a static factory — it already takes the deps object.
   static async create({ logger }: { logger: Logger }) {
     await new Promise((resolve) => setTimeout(resolve, 10));
     logger.log("db connected");
@@ -54,9 +53,7 @@ class Greeter {
   }
 }
 
-// Positional-argument constructor: `asClass(..., { positional: true })`
-// spreads deps into the parameters in the order listed in `.service`, so
-// existing classes can be registered unchanged.
+// Positional-argument constructor: `{ positional: true }` spreads deps in order.
 class Farewell {
   #logger: Logger;
   #db: Db;
