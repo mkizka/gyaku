@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { asClass, asClassArgs, createRegistry } from "@gyaku/di";
+import { asClass, createRegistry } from "@gyaku/di";
 
 class Logger {
   log(message: string) {
@@ -54,9 +54,9 @@ class Greeter {
   }
 }
 
-// Positional-argument constructor: `asClassArgs` spreads deps into the
-// parameters in the order listed in `.service`, so existing classes can be
-// registered unchanged.
+// Positional-argument constructor: `asClass(..., { positional: true })`
+// spreads deps into the parameters in the order listed in `.service`, so
+// existing classes can be registered unchanged.
 class Farewell {
   #logger: Logger;
   #db: Db;
@@ -77,7 +77,11 @@ const registry = createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], Db.create)
   .service("greeter", ["logger", "db"], asClass(Greeter))
-  .service("farewell", ["logger", "db"], asClassArgs(Farewell));
+  .service(
+    "farewell",
+    ["logger", "db"],
+    asClass(Farewell, { positional: true }),
+  );
 
 const main = async () => {
   await using app = await registry.resolve();

@@ -70,11 +70,11 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
-### `asClass(Class)` / `asClassArgs(Class)`
+### `asClass(Class)` / `asClass(Class, { positional: true })`
 
-Helpers for migrating class-based DI. They adapt a class constructor into a factory so existing classes can be registered without a hand-written `(deps) => new Foo(...)` wrapper.
+Helper for migrating class-based DI. It adapts a class constructor into a factory so existing classes can be registered without a hand-written `(deps) => new Foo(...)` wrapper.
 
-Use `asClass` when the constructor takes a single dependency object. The resolved deps are passed straight in, so it stays fully type-safe — missing or mistyped dependencies are caught at compile time.
+By default, `asClass` is for constructors that take a single dependency object. The resolved deps are passed straight in, so it stays fully type-safe — missing or mistyped dependencies are caught at compile time.
 
 ```ts
 import { asClass, createRegistry } from "@gyaku/di";
@@ -91,11 +91,9 @@ createRegistry()
   .service("greeter", ["logger"], asClass(Greeter));
 ```
 
-Use `asClassArgs` when the constructor takes positional arguments. The deps are spread into the constructor in the order listed in `.service`, so no extra key list is needed.
+Pass `{ positional: true }` when the constructor takes positional arguments. The deps are spread into the constructor in the order listed in `.service`, so no extra key list is needed.
 
 ```ts
-import { asClassArgs, createRegistry } from "@gyaku/di";
-
 class Greeter {
   #logger: Logger;
   #db: Db;
@@ -109,11 +107,11 @@ createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], createDb)
   // deps order ["logger", "db"] maps to constructor(logger, db).
-  .service("greeter", ["logger", "db"], asClassArgs(Greeter));
+  .service("greeter", ["logger", "db"], asClass(Greeter, { positional: true }));
 ```
 
 > [!NOTE]
-> Unlike `asClass`, `asClassArgs` only infers the instance type — it does **not** check the constructor's parameters against the declared dependencies. Make sure `deps` lists exactly the constructor's parameters, in order. Keep service keys as ordinary identifiers (not integer-like strings such as `"0"`), since the values are read positionally with `Object.values`.
+> With `{ positional: true }`, `asClass` only infers the instance type — it does **not** check the constructor's parameters against the declared dependencies. Make sure `deps` lists exactly the constructor's parameters, in order. Keep service keys as ordinary identifiers (not integer-like strings such as `"0"`), since the values are read positionally with `Object.values`.
 
 For async setup, prefer a static factory (`static create(deps)`) that returns the instance — it already matches the factory shape, so no helper is needed.
 

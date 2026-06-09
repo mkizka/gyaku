@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { asClass, asClassArgs, createRegistry } from "../src/index.ts";
+import { asClass, createRegistry } from "../src/index.ts";
 
 type Logger = { log: (message: string) => void };
 type Db = { query: (sql: string) => string[] };
@@ -57,7 +57,7 @@ describe("asClass", () => {
   });
 });
 
-describe("asClassArgs", () => {
+describe("asClass with { positional: true }", () => {
   it("infers the instance type from the constructor", () => {
     class Repo {
       logger: Logger;
@@ -68,7 +68,7 @@ describe("asClassArgs", () => {
       }
     }
 
-    const factory = asClassArgs(Repo);
+    const factory = asClass(Repo, { positional: true });
     expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
 
@@ -88,7 +88,7 @@ describe("asClassArgs", () => {
     const services = await createRegistry()
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["logger", "db"], asClassArgs(Repo))
+      .service("repo", ["logger", "db"], asClass(Repo, { positional: true }))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();

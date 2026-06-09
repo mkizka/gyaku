@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asClass, asClassArgs, createRegistry } from "../src/index.ts";
+import { asClass, createRegistry } from "../src/index.ts";
 
 class Logger {
   readonly lines: string[] = [];
@@ -49,7 +49,7 @@ describe("asClass", () => {
   });
 });
 
-describe("asClassArgs", () => {
+describe("asClass with { positional: true }", () => {
   it("spreads resolved dependencies into positional constructor args in deps order", async () => {
     class Db {
       query(sql: string) {
@@ -73,7 +73,7 @@ describe("asClassArgs", () => {
     await using services = await createRegistry()
       .service("logger", () => new Logger())
       .service("db", () => new Db())
-      .service("repo", ["logger", "db"], asClassArgs(Repo))
+      .service("repo", ["logger", "db"], asClass(Repo, { positional: true }))
       .resolve();
 
     expect(services.repo).toBeInstanceOf(Repo);
@@ -95,7 +95,7 @@ describe("asClassArgs", () => {
       .value("a", "value-a")
       .value("b", "value-b")
       // deps order ["b", "a"] maps to constructor(first = b, second = a).
-      .service("pair", ["b", "a"], asClassArgs(Pair))
+      .service("pair", ["b", "a"], asClass(Pair, { positional: true }))
       .resolve();
 
     expect(services.pair.first).toBe("value-b");
