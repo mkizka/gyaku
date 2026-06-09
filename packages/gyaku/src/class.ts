@@ -21,7 +21,6 @@ export function asClass(
   options?: { positional?: boolean },
 ): (deps: Record<string, unknown>) => unknown {
   return (deps) => {
-    // positional: spread deps values in declared order; otherwise pass deps as is.
     const args = options?.positional ? Object.values(deps) : [deps];
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- `args` is aligned with the constructor parameters by the caller's deps declaration.
     return new Ctor(...(args as never[]));

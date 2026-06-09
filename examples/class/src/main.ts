@@ -32,7 +32,6 @@ class Db {
   }
 }
 
-// Object-argument constructor: `asClass` passes the resolved deps straight in.
 class Greeter {
   #logger: Logger;
   #db: Db;
