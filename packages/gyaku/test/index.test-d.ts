@@ -247,6 +247,13 @@ describe("ServiceRegistry.replaceService", () => {
       .replaceService("db", () => ({ add: (row: string) => [row] }));
   });
 
+  it("keeps requiring the call signature of a function service", () => {
+    createRegistry()
+      .service("format", () => (value: number) => value.toFixed(2))
+      // @ts-expect-error an object without a call signature is not assignable.
+      .replaceService("format", () => ({}));
+  });
+
   it("unwraps a Promise replacement and keeps its extra members", () => {
     const registry = createRegistry()
       .service("db", (): Db => ({ query: (sql) => [sql] }))

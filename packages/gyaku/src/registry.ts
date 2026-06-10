@@ -17,6 +17,15 @@ type RegisteredKey<ServiceMap extends ServiceMapBase> = Extract<
 // would be re-checked whenever `replaceService` rewrites `ServiceMap`, and fail.
 type DepsMapBase = Record<string, readonly string[]>;
 
+// Strips private/protected members so class-based services can be replaced by
+// any value matching the public surface. Functions are kept as-is because a
+// homomorphic mapped type would drop their call signatures.
+type PublicInterface<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends object
+    ? { [K in keyof T]: T[K] }
+    : T;
+
 type ReplaceValue<
   ServiceMap extends ServiceMapBase,
   Key extends keyof ServiceMap,
@@ -84,7 +93,7 @@ type ServiceRegistry<
 
   replaceService: <
     const Key extends RegisteredKey<ServiceMap>,
-    Result extends OriginalMap[Key],
+    Result extends PublicInterface<OriginalMap[Key]>,
   >(
     key: Key,
     factory: (
@@ -98,7 +107,7 @@ type ServiceRegistry<
 
   replaceValue: <
     const Key extends RegisteredKey<ServiceMap>,
-    T extends OriginalMap[Key],
+    T extends PublicInterface<OriginalMap[Key]>,
   >(
     key: Key,
     instance: T,
