@@ -300,6 +300,14 @@ describe("ServiceRegistry.replaceValue", () => {
       .replaceValue("logger", 42);
   });
 
+  it("accepts a replacement for a primitive service", () => {
+    createRegistry()
+      .value("port", 3000)
+      .replaceValue("port", 4000)
+      // @ts-expect-error string is not assignable to number.
+      .replaceValue("port", "4000");
+  });
+
   it("widens the service type to the instance's extra members", async () => {
     const rows: string[] = [];
     const stub = {
