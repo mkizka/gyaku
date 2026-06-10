@@ -24,7 +24,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "keywords": [
     "di",
