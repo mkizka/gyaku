@@ -118,6 +118,28 @@ createRegistry().service(
 );
 ```
 
+To register a class under an interface it implements, call `asClass<Interface>()` and apply the class to the returned function. The registered type is pinned to `Interface`, while `deps` is still inferred from the constructor.
+
+```ts
+interface Greeter {
+  greet(name: string): string;
+}
+
+class GreeterImpl implements Greeter {
+  constructor(private deps: { logger: Logger }) {}
+  greet(name: string) {
+    return `hello, ${name}`;
+  }
+}
+
+createRegistry()
+  .service("logger", () => new Logger())
+  // services.greeter is typed as Greeter, not GreeterImpl
+  .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl));
+```
+
+The call is split into two steps because TypeScript cannot pin the instance type while inferring `deps` in a single call (no partial type-argument inference). It works with `{ positional: true }` too: `asClass<Greeter>()(GreeterImpl, { positional: true })`.
+
 ### Errors
 
 All errors extend `GyakuError`.
@@ -148,6 +170,7 @@ try {
 - `then` is reserved (would make the services object look thenable).
 - Services object has a null prototype, so keys like `__proto__` are safe.
 - `asClass(Class, { positional: true })` infers only the instance type — it does not check that `deps` matches the constructor's parameters.
+- `asClass<Interface>()(Class)` registers the class under `Interface` while still inferring `deps` from the constructor.
 
 ## License
 
