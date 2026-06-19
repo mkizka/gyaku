@@ -170,7 +170,6 @@ try {
 - `then` is reserved (would make the services object look thenable).
 - Services object has a null prototype, so keys like `__proto__` are safe.
 - `asClass(Class, { positional: true })` infers only the instance type — it does not check that `deps` matches the constructor's parameters.
-- `asClass<Interface>()(Class)` registers a class under an interface it implements.
 
 ## License
 
