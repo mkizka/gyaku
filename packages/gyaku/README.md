@@ -132,12 +132,10 @@ class GreeterImpl implements Greeter {
   }
 }
 
-// services.greeter is typed as Greeter, not GreeterImpl
-createRegistry().service(
-  "greeter",
-  ["logger"],
-  asClass<Greeter>()(GreeterImpl),
-);
+createRegistry()
+  .service("logger", () => new Logger())
+  // services.greeter is typed as Greeter, not GreeterImpl
+  .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl));
 ```
 
 The call is split in two because TypeScript can't pin the instance type and infer `deps` in one call. It works with `{ positional: true }` too: `asClass<Greeter>()(GreeterImpl, { positional: true })`.
