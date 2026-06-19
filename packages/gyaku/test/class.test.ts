@@ -102,3 +102,61 @@ describe("asClass with { positional: true }", () => {
     expect(services.pair.second).toBe("value-a");
   });
 });
+
+describe("asClass<Interface>() (curried)", () => {
+  it("builds the instance just like the direct form", async () => {
+    interface Greeter {
+      greet: (name: string) => string;
+    }
+    class GreeterImpl implements Greeter {
+      readonly #logger: Logger;
+      constructor({ logger }: { logger: Logger }) {
+        this.#logger = logger;
+      }
+      greet(name: string) {
+        this.#logger.log(`hello, ${name}`);
+        return `hello, ${name}`;
+      }
+    }
+
+    await using services = await createRegistry()
+      .service("logger", () => new Logger())
+      .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl))
+      .resolve();
+
+    expect(services.greeter.greet("gyaku")).toBe("hello, gyaku");
+    expect(services.logger.lines).toEqual(["hello, gyaku"]);
+  });
+
+  it("supports positional constructors", async () => {
+    interface Repo {
+      find: (sql: string) => string[];
+    }
+    class Db {
+      query(sql: string) {
+        return [sql];
+      }
+    }
+    class RepoImpl implements Repo {
+      readonly #db: Db;
+      constructor(_logger: Logger, db: Db) {
+        this.#db = db;
+      }
+      find(sql: string) {
+        return this.#db.query(sql);
+      }
+    }
+
+    await using services = await createRegistry()
+      .service("logger", () => new Logger())
+      .service("db", () => new Db())
+      .service(
+        "repo",
+        ["logger", "db"],
+        asClass<Repo>()(RepoImpl, { positional: true }),
+      )
+      .resolve();
+
+    expect(services.repo.find("select 1")).toEqual(["select 1"]);
+  });
+});
