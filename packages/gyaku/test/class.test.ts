@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asClass, createRegistry } from "../src/index.ts";
+import { asClass, asClassArgs, createRegistry } from "../src/index.ts";
 
 class Logger {
   readonly lines: string[] = [];
@@ -49,7 +49,7 @@ describe("asClass", () => {
   });
 });
 
-describe("asClass with { positional: true }", () => {
+describe("asClassArgs", () => {
   it("spreads resolved dependencies into positional constructor args in deps order", async () => {
     class Db {
       query(sql: string) {
@@ -73,7 +73,7 @@ describe("asClass with { positional: true }", () => {
     await using services = await createRegistry()
       .service("logger", () => new Logger())
       .service("db", () => new Db())
-      .service("repo", ["logger", "db"], asClass(Repo, { positional: true }))
+      .service("repo", ["logger", "db"], asClassArgs(Repo))
       .resolve();
 
     expect(services.repo).toBeInstanceOf(Repo);
@@ -87,7 +87,7 @@ describe("asClass with { positional: true }", () => {
     }
 
     await using services = await createRegistry()
-      .service("counter", asClass(Counter, { positional: true }))
+      .service("counter", asClassArgs(Counter))
       .resolve();
 
     expect(services.counter).toBeInstanceOf(Counter);
@@ -98,7 +98,7 @@ describe("asClass with { positional: true }", () => {
       count = 0;
     }
 
-    expect(asClass(Counter, { positional: true })()).toBeInstanceOf(Counter);
+    expect(asClassArgs(Counter)()).toBeInstanceOf(Counter);
   });
 
   it("follows the deps array order, not the registration order", async () => {
@@ -115,10 +115,46 @@ describe("asClass with { positional: true }", () => {
       .value("a", "value-a")
       .value("b", "value-b")
       // deps order ["b", "a"] maps to constructor(first = b, second = a).
-      .service("pair", ["b", "a"], asClass(Pair, { positional: true }))
+      .service("pair", ["b", "a"], asClassArgs(Pair))
       .resolve();
 
     expect(services.pair.first).toBe("value-b");
     expect(services.pair.second).toBe("value-a");
+  });
+});
+
+describe("asClass with { positional: true } (deprecated)", () => {
+  it("still spreads dependencies into positional constructor args, like asClassArgs", async () => {
+    class Db {
+      query(sql: string) {
+        return [sql];
+      }
+    }
+
+    class Repo {
+      readonly #logger: Logger;
+      readonly #db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.#logger = logger;
+        this.#db = db;
+      }
+      find(sql: string) {
+        this.#logger.log(sql);
+        return this.#db.query(sql);
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- exercising the deprecated overload on purpose to keep it working.
+    const repoFactory = asClass(Repo, { positional: true });
+
+    await using services = await createRegistry()
+      .service("logger", () => new Logger())
+      .service("db", () => new Db())
+      .service("repo", ["logger", "db"], repoFactory)
+      .resolve();
+
+    expect(services.repo).toBeInstanceOf(Repo);
+    expect(services.repo.find("select 1")).toEqual(["select 1"]);
+    expect(services.logger.lines).toEqual(["select 1"]);
   });
 });

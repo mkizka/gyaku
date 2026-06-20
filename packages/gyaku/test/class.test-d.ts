@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { asClass, createRegistry } from "../src/index.ts";
+import { asClass, asClassArgs, createRegistry } from "../src/index.ts";
 
 type Logger = { log: (message: string) => void };
 type Db = { query: (sql: string) => string[] };
@@ -57,7 +57,7 @@ describe("asClass", () => {
   });
 });
 
-describe("asClass with { positional: true }", () => {
+describe("asClassArgs", () => {
   it("infers the instance type from the constructor", () => {
     class Repo {
       logger: Logger;
@@ -68,7 +68,7 @@ describe("asClass with { positional: true }", () => {
       }
     }
 
-    const factory = asClass(Repo, { positional: true });
+    const factory = asClassArgs(Repo);
     expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
 
@@ -88,7 +88,7 @@ describe("asClass with { positional: true }", () => {
     const services = await createRegistry()
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["logger", "db"], asClass(Repo, { positional: true }))
+      .service("repo", ["logger", "db"], asClassArgs(Repo))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();
@@ -102,7 +102,7 @@ describe("asClass with { positional: true }", () => {
     // The factory must be assignable to the `() => Result` overload, so no
     // empty deps array is needed for a positional class with no dependencies.
     const services = await createRegistry()
-      .service("counter", asClass(Counter, { positional: true }))
+      .service("counter", asClassArgs(Counter))
       .resolve();
 
     expectTypeOf(services.counter).toEqualTypeOf<Counter>();
