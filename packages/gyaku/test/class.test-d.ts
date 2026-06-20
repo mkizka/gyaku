@@ -93,4 +93,18 @@ describe("asClass with { positional: true }", () => {
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();
   });
+
+  it("registers a dependency-free class via the no-deps .service overload", async () => {
+    class Counter {
+      count = 0;
+    }
+
+    // The factory must be assignable to the `() => Result` overload, so no
+    // empty deps array is needed for a positional class with no dependencies.
+    const services = await createRegistry()
+      .service("counter", asClass(Counter, { positional: true }))
+      .resolve();
+
+    expectTypeOf(services.counter).toEqualTypeOf<Counter>();
+  });
 });
