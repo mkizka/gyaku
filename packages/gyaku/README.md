@@ -120,25 +120,36 @@ createRegistry().service(
 
 With `asClass<Interface>()(Class)`, the registered type is pinned to `Interface` instead of the concrete class, while `deps` is still inferred from the constructor.
 
+This matters most for `.replaceService` / `.replaceValue`: a replacement must be assignable to the **originally registered type**. Pin a class to an interface and a test can swap in a stub that only has to satisfy that interface. Register the concrete class instead and the replacement would have to match the class down to its `#private` fields — usually impossible.
+
 ```ts
-interface Greeter {
-  greet(name: string): string;
+interface UserRepository {
+  find(id: number): Promise<User | undefined>;
 }
 
-class GreeterImpl implements Greeter {
-  constructor(private deps: { logger: Logger }) {}
-  greet(name: string) {
-    return `hello, ${name}`;
+class UserRepositoryImpl implements UserRepository {
+  constructor(private deps: { db: Db }) {}
+  find(id: number) {
+    return this.deps.db.findUser(id);
   }
 }
 
-createRegistry()
-  .service("logger", () => new Logger())
-  // services.greeter is typed as Greeter, not GreeterImpl
-  .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl));
+const productionRegistry = createRegistry()
+  .service("db", createDb)
+  // userRepository is pinned to UserRepository, not UserRepositoryImpl
+  .service(
+    "userRepository",
+    ["db"],
+    asClass<UserRepository>()(UserRepositoryImpl),
+  );
+
+// the stub only has to satisfy UserRepository
+const testRegistry = productionRegistry.replaceValue("userRepository", {
+  find: async (id) => ({ id, name: "stub" }),
+});
 ```
 
-The call is split in two because TypeScript can't pin the instance type and infer `deps` in one call. It works with `{ positional: true }` too: `asClass<Greeter>()(GreeterImpl, { positional: true })`.
+It works with `{ positional: true }` too: `asClass<UserRepository>()(UserRepositoryImpl, { positional: true })`.
 
 ### Errors
 
