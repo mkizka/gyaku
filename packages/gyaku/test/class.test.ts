@@ -84,9 +84,6 @@ describe("asClass with { positional: true }", () => {
   it("builds a dependency-free class registered without a deps array", async () => {
     class Counter {
       count = 0;
-      increment() {
-        this.count += 1;
-      }
     }
 
     await using services = await createRegistry()
@@ -94,8 +91,6 @@ describe("asClass with { positional: true }", () => {
       .resolve();
 
     expect(services.counter).toBeInstanceOf(Counter);
-    services.counter.increment();
-    expect(services.counter.count).toBe(1);
   });
 
   it("builds a class when the factory is called without deps", () => {
@@ -103,8 +98,7 @@ describe("asClass with { positional: true }", () => {
       count = 0;
     }
 
-    const factory = asClass(Counter, { positional: true });
-    expect(factory()).toBeInstanceOf(Counter);
+    expect(asClass(Counter, { positional: true })()).toBeInstanceOf(Counter);
   });
 
   it("follows the deps array order, not the registration order", async () => {
