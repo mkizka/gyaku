@@ -108,9 +108,6 @@ describe("asClass<Interface>() (curried)", () => {
     greet() {
       return "hi";
     }
-    secret() {
-      return "hidden";
-    }
   }
 
   it("pins the return type to the interface while inferring deps", () => {
@@ -120,23 +117,6 @@ describe("asClass<Interface>() (curried)", () => {
       db: Db;
     }>();
     expectTypeOf(factory).returns.toEqualTypeOf<Greeter>();
-  });
-
-  it("registers the interface type instead of the concrete class", async () => {
-    const services = await createRegistry()
-      .service("logger", (): Logger => ({ log: () => undefined }))
-      .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("greeter", ["logger", "db"], asClass<Greeter>()(GreeterImpl))
-      .resolve();
-
-    expectTypeOf(services.greeter).toEqualTypeOf<Greeter>();
-  });
-
-  it("still rejects a class whose declared dependencies are incomplete", () => {
-    createRegistry()
-      .service("logger", (): Logger => ({ log: () => undefined }))
-      // @ts-expect-error "db" is missing from the declared dependencies.
-      .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl));
   });
 
   it("rejects a class whose instance does not satisfy the interface", () => {

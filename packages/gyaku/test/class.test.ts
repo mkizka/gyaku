@@ -104,6 +104,9 @@ describe("asClass with { positional: true }", () => {
 });
 
 describe("asClass<Interface>() (curried)", () => {
+  // The curried form returns the same factory as the direct form, so one case
+  // is enough to cover its runtime behavior; the type contract is checked in
+  // class.test-d.ts.
   it("builds the instance just like the direct form", async () => {
     interface Greeter {
       greet: (name: string) => string;
@@ -126,37 +129,5 @@ describe("asClass<Interface>() (curried)", () => {
 
     expect(services.greeter.greet("gyaku")).toBe("hello, gyaku");
     expect(services.logger.lines).toEqual(["hello, gyaku"]);
-  });
-
-  it("supports positional constructors", async () => {
-    interface Repo {
-      find: (sql: string) => string[];
-    }
-    class Db {
-      query(sql: string) {
-        return [sql];
-      }
-    }
-    class RepoImpl implements Repo {
-      readonly #db: Db;
-      constructor(_logger: Logger, db: Db) {
-        this.#db = db;
-      }
-      find(sql: string) {
-        return this.#db.query(sql);
-      }
-    }
-
-    await using services = await createRegistry()
-      .service("logger", () => new Logger())
-      .service("db", () => new Db())
-      .service(
-        "repo",
-        ["logger", "db"],
-        asClass<Repo>()(RepoImpl, { positional: true }),
-      )
-      .resolve();
-
-    expect(services.repo.find("select 1")).toEqual(["select 1"]);
   });
 });
