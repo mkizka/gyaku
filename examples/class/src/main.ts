@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { asClass, createRegistry } from "@gyaku/di";
+import { asClass, asClassArgs, createRegistry } from "@gyaku/di";
 
 class Logger {
   log(message: string) {
@@ -71,11 +71,7 @@ const registry = createRegistry()
   .service("logger", () => new Logger())
   .service("db", ["logger"], Db.create)
   .service("greeter", ["logger", "db"], asClass(Greeter))
-  .service(
-    "farewell",
-    ["logger", "db"],
-    asClass(Farewell, { positional: true }),
-  );
+  .service("farewell", ["logger", "db"], asClassArgs(Farewell));
 
 const main = async () => {
   await using app = await registry.resolve();
