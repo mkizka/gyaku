@@ -1,4 +1,4 @@
-export { asClass } from "./class.js";
+export { asClass, asClassArgs } from "./class.js";
 export {
   DisposeError,
   GyakuError,

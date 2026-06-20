@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { asClass, createRegistry } from "../src/index.ts";
+import { asClass, asClassArgs, createRegistry } from "../src/index.ts";
 
 type Logger = { log: (message: string) => void };
 type Db = { query: (sql: string) => string[] };
@@ -106,6 +106,54 @@ describe("asClass with { positional: true }", () => {
       .resolve();
 
     expectTypeOf(services.counter).toEqualTypeOf<Counter>();
+  });
+});
+
+describe("asClassArgs", () => {
+  it("infers the instance type from the constructor", () => {
+    class Repo {
+      logger: Logger;
+      db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.logger = logger;
+        this.db = db;
+      }
+    }
+
+    const factory = asClassArgs(Repo);
+    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
+  });
+
+  it("registers a dependency-free class via the no-deps .service overload", async () => {
+    class Counter {
+      count = 0;
+    }
+
+    const services = await createRegistry()
+      .service("counter", asClassArgs(Counter))
+      .resolve();
+
+    expectTypeOf(services.counter).toEqualTypeOf<Counter>();
+  });
+
+  it("pins the return type to the interface in the curried form", () => {
+    interface Repo {
+      find: () => string[];
+    }
+    class RepoImpl implements Repo {
+      logger: Logger;
+      db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.logger = logger;
+        this.db = db;
+      }
+      find() {
+        return this.db.query("select 1");
+      }
+    }
+
+    const factory = asClassArgs<Repo>()(RepoImpl);
+    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
 });
 
