@@ -122,3 +122,32 @@ describe("asClass with { positional: true }", () => {
     expect(services.pair.second).toBe("value-a");
   });
 });
+
+describe("asClass<Interface>() (curried)", () => {
+  // The curried form returns the same factory as the direct form, so one case
+  // is enough to cover its runtime behavior; the type contract is checked in
+  // class.test-d.ts.
+  it("builds the instance just like the direct form", async () => {
+    interface Greeter {
+      greet: (name: string) => string;
+    }
+    class GreeterImpl implements Greeter {
+      readonly #logger: Logger;
+      constructor({ logger }: { logger: Logger }) {
+        this.#logger = logger;
+      }
+      greet(name: string) {
+        this.#logger.log(`hello, ${name}`);
+        return `hello, ${name}`;
+      }
+    }
+
+    await using services = await createRegistry()
+      .service("logger", () => new Logger())
+      .service("greeter", ["logger"], asClass<Greeter>()(GreeterImpl))
+      .resolve();
+
+    expect(services.greeter.greet("gyaku")).toBe("hello, gyaku");
+    expect(services.logger.lines).toEqual(["hello, gyaku"]);
+  });
+});

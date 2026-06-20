@@ -108,3 +108,63 @@ describe("asClass with { positional: true }", () => {
     expectTypeOf(services.counter).toEqualTypeOf<Counter>();
   });
 });
+
+describe("asClass<Interface>() (curried)", () => {
+  interface Greeter {
+    greet: () => string;
+  }
+
+  class GreeterImpl implements Greeter {
+    deps: { logger: Logger; db: Db };
+    constructor(deps: { logger: Logger; db: Db }) {
+      this.deps = deps;
+    }
+    greet() {
+      return "hi";
+    }
+  }
+
+  it("pins the return type to the interface while inferring deps", () => {
+    const factory = asClass<Greeter>()(GreeterImpl);
+    expectTypeOf(factory).parameter(0).toEqualTypeOf<{
+      logger: Logger;
+      db: Db;
+    }>();
+    expectTypeOf(factory).returns.toEqualTypeOf<Greeter>();
+  });
+
+  it("rejects a class whose instance does not satisfy the interface", () => {
+    class NotGreeter {
+      logger: Logger;
+      constructor(deps: { logger: Logger }) {
+        this.logger = deps.logger;
+      }
+      farewell() {
+        return "bye";
+      }
+    }
+
+    // @ts-expect-error NotGreeter has no `greet`, so it is not assignable to Greeter.
+    asClass<Greeter>()(NotGreeter);
+  });
+
+  it("pins the return type for a positional constructor too", () => {
+    interface Repo {
+      find: () => string[];
+    }
+    class RepoImpl implements Repo {
+      logger: Logger;
+      db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.logger = logger;
+        this.db = db;
+      }
+      find() {
+        return this.db.query("select 1");
+      }
+    }
+
+    const factory = asClass<Repo>()(RepoImpl, { positional: true });
+    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
+  });
+});
