@@ -147,6 +147,33 @@ const testRegistry = productionRegistry.replaceValue("userRepository", {
 
 It works with `asClassArgs` too: `asClassArgs<UserRepository>()(UserRepositoryImpl)`.
 
+### `asFactoryArgs(factory)`
+
+The function counterpart of `asClassArgs`: it adapts a factory that takes
+**positional** arguments into a service factory, spreading deps into the call in
+`deps` order. Only the result type is inferred, so `deps` must list the
+parameters in order. Async factories work too — the resolved value is awaited.
+
+```ts
+const createRepo = (logger: Logger, db: Db) => ({
+  find: (sql: string) => db.query(sql),
+});
+
+createRegistry().service("repo", ["logger", "db"], asFactoryArgs(createRepo));
+```
+
+With `asFactoryArgs<Type>()(factory)`, the registered type is pinned to `Type`
+instead of the inferred result, while `deps` is still inferred from the factory —
+the same interface-pinning trick as `asClass<Interface>()`.
+
+```ts
+interface Repo {
+  find: (sql: string) => string[];
+}
+
+createRegistry().service("repo", ["db"], asFactoryArgs<Repo>()(createRepo));
+```
+
 ### Errors
 
 All errors extend `GyakuError`.
