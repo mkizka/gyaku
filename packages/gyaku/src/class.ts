@@ -3,7 +3,14 @@ const POSITIONAL_FACTORY_BRAND: unique symbol = Symbol();
 export type PositionalFactory<Args extends readonly unknown[], Instance> = ((
   deps: Record<string, unknown>,
 ) => Instance) & {
-  readonly [POSITIONAL_FACTORY_BRAND]: Args;
+  // Each element is wrapped in `(arg: T) => void` to make Args contravariant,
+  // so a factory accepting a wider type is assignable to one expecting a narrower
+  // type (e.g. `(arg: LogLevel) => void` satisfies `(arg: "error") => void`).
+  // Tuple length mismatch is still caught because tuples of different lengths
+  // are never mutually assignable.
+  readonly [POSITIONAL_FACTORY_BRAND]: readonly [
+    ...{ [K in keyof Args]: (arg: Args[K]) => void },
+  ];
 };
 
 export type NotPositionalFactory<T> = T & {
