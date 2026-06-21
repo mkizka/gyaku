@@ -8,6 +8,12 @@ import {
 
 type ServiceMapBase = Record<string, unknown>;
 
+// Collapses an intersection chain (e.g. `A & Record<K1, V1> & Record<K2, V2>`)
+// into a single flat object type for display. Purely cosmetic: it keeps editor
+// hovers and inferred signatures readable as `{ k1: V1; k2: V2 }` instead of a
+// long `Record<...> & Record<...>` chain, without changing the structural type.
+type Prettify<T> = { [K in keyof T]: T[K] };
+
 type RegisteredKey<ServiceMap extends ServiceMapBase> = Extract<
   keyof ServiceMap,
   string
@@ -54,7 +60,7 @@ type ServiceRegistry<
       key: UnregisteredKey<Key, ServiceMap>,
       factory: () => Result,
     ): ServiceRegistry<
-      ServiceMap & Record<Key, Awaited<Result>>,
+      Prettify<ServiceMap & Record<Key, Awaited<Result>>>,
       DepsMap & Record<Key, readonly []>,
       OriginalMap & Record<Key, Awaited<Result>>
     >;
@@ -65,9 +71,9 @@ type ServiceRegistry<
     >(
       key: UnregisteredKey<Key, ServiceMap>,
       dependencies: Deps,
-      factory: (deps: Pick<ServiceMap, Deps[number]>) => Result,
+      factory: (deps: Prettify<Pick<ServiceMap, Deps[number]>>) => Result,
     ): ServiceRegistry<
-      ServiceMap & Record<Key, Awaited<Result>>,
+      Prettify<ServiceMap & Record<Key, Awaited<Result>>>,
       DepsMap & Record<Key, Deps>,
       OriginalMap & Record<Key, Awaited<Result>>
     >;
@@ -77,7 +83,7 @@ type ServiceRegistry<
     key: UnregisteredKey<Key, ServiceMap>,
     instance: T,
   ) => ServiceRegistry<
-    ServiceMap & Record<Key, T>,
+    Prettify<ServiceMap & Record<Key, T>>,
     DepsMap & Record<Key, readonly []>,
     OriginalMap & Record<Key, T>
   >;
@@ -88,10 +94,10 @@ type ServiceRegistry<
   >(
     key: Key,
     factory: (
-      deps: Pick<ServiceMap, DepsMap[Key][number]>,
+      deps: Prettify<Pick<ServiceMap, DepsMap[Key][number]>>,
     ) => Result | Promise<Result>,
   ) => ServiceRegistry<
-    ReplaceValue<ServiceMap, Key, Result>,
+    Prettify<ReplaceValue<ServiceMap, Key, Result>>,
     DepsMap,
     OriginalMap
   >;
@@ -102,7 +108,11 @@ type ServiceRegistry<
   >(
     key: Key,
     instance: T,
-  ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, DepsMap, OriginalMap>;
+  ) => ServiceRegistry<
+    Prettify<ReplaceValue<ServiceMap, Key, T>>,
+    DepsMap,
+    OriginalMap
+  >;
 
   /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
   override: ServiceRegistry<ServiceMap, DepsMap, OriginalMap>["replaceService"];
