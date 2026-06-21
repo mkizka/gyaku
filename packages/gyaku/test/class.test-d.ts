@@ -223,6 +223,41 @@ describe("asClassArgs", () => {
     const factory = asClassArgs<Repo>()(RepoImpl);
     expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
+
+  it("accepts a factory whose parameter type is wider than the registered value type", () => {
+    type LogLevel = "debug" | "info" | "warn" | "error";
+    class Logger2 {
+      readonly logLevel: LogLevel;
+      constructor(logLevel: LogLevel) {
+        this.logLevel = logLevel;
+      }
+    }
+
+    // "error" as const is a subtype of LogLevel, so passing Logger2 is safe.
+    createRegistry()
+      .value("logLevel", "error" as const)
+      .service("logger", ["logLevel"], asClassArgs(Logger2));
+  });
+
+  it("accepts a factory whose parameter type is a supertype of the registered service type", () => {
+    interface ILogger {
+      log: (msg: string) => void;
+    }
+    class Logger2 implements ILogger {
+      log(_msg: string) {}
+    }
+    class Service {
+      readonly logger: ILogger;
+      constructor(logger: ILogger) {
+        this.logger = logger;
+      }
+    }
+
+    // Logger2 implements ILogger, so passing Logger2 where ILogger is expected is safe.
+    createRegistry()
+      .service("logger", asClassArgs(Logger2))
+      .service("service", ["logger"], asClassArgs(Service));
+  });
 });
 
 describe("asClass<Interface>() (curried)", () => {
