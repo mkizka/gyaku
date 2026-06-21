@@ -136,6 +136,74 @@ describe("asClassArgs", () => {
     expectTypeOf(services.counter).toEqualTypeOf<Counter>();
   });
 
+  it("rejects registering when declared deps are fewer than constructor parameters", () => {
+    class Repo {
+      logger: Logger;
+      db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.logger = logger;
+        this.db = db;
+      }
+    }
+
+    createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error "db" is missing from the declared deps but the constructor requires it.
+      .service("repo", ["logger"], asClassArgs(Repo));
+  });
+
+  it("rejects using asClassArgs with a deps-object constructor (asClass is the right tool)", () => {
+    class Greeter {
+      deps: { logger: Logger; db: Db };
+      constructor(deps: { logger: Logger; db: Db }) {
+        this.deps = deps;
+      }
+    }
+
+    createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error Greeter takes a single object arg, not positional args — use asClass instead.
+      .service("greeter", ["logger", "db"], asClassArgs(Greeter));
+  });
+
+  it("rejects registering when declared deps exceed constructor parameters", () => {
+    class Logger2 {
+      logger: Logger;
+      constructor(logger: Logger) {
+        this.logger = logger;
+      }
+    }
+
+    createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error Logger2 takes only (Logger) but "db" is also declared.
+      .service("repo", ["logger", "db"], asClassArgs(Logger2));
+  });
+
+  it("rejects deps mismatch in the curried form", () => {
+    class Repo {
+      logger: Logger;
+      db: Db;
+      constructor(logger: Logger, db: Db) {
+        this.logger = logger;
+        this.db = db;
+      }
+    }
+
+    interface RepoInterface {
+      find: () => string[];
+    }
+
+    createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error "db" is missing from the declared deps.
+      .service("repo", ["logger"], asClassArgs<RepoInterface>()(Repo));
+  });
+
   it("pins the return type to the interface in the curried form", () => {
     interface Repo {
       find: () => string[];

@@ -1,3 +1,4 @@
+import type { NotPositionalFactory, PositionalFactory } from "./class.js";
 import {
   DisposeError,
   RegistryError,
@@ -50,6 +51,15 @@ type ServiceRegistry<
   OriginalMap extends ServiceMapBase,
 > = {
   service: {
+    // Before () => Result — ensures the PositionalFactory<[]> brand check fires first.
+    <const Key extends string, Instance>(
+      key: UnregisteredKey<Key, ServiceMap>,
+      factory: PositionalFactory<[], Instance>,
+    ): ServiceRegistry<
+      ServiceMap & Record<Key, Awaited<Instance>>,
+      DepsMap & Record<Key, readonly []>,
+      OriginalMap & Record<Key, Awaited<Instance>>
+    >;
     <const Key extends string, Result>(
       key: UnregisteredKey<Key, ServiceMap>,
       factory: () => Result,
@@ -61,11 +71,30 @@ type ServiceRegistry<
     <
       const Key extends string,
       const Deps extends readonly RegisteredKey<ServiceMap>[],
+      Instance,
+    >(
+      key: UnregisteredKey<Key, ServiceMap>,
+      dependencies: Deps,
+      factory: PositionalFactory<
+        { [K in keyof Deps]: ServiceMap[Deps[K]] },
+        Instance
+      >,
+    ): ServiceRegistry<
+      ServiceMap & Record<Key, Awaited<Instance>>,
+      DepsMap & Record<Key, Deps>,
+      OriginalMap & Record<Key, Awaited<Instance>>
+    >;
+    <
+      const Key extends string,
+      const Deps extends readonly RegisteredKey<ServiceMap>[],
       Result,
     >(
       key: UnregisteredKey<Key, ServiceMap>,
       dependencies: Deps,
-      factory: (deps: Pick<ServiceMap, Deps[number]>) => Result,
+      // Exclude PositionalFactory so it cannot fall through to this overload.
+      factory: NotPositionalFactory<
+        (deps: Pick<ServiceMap, Deps[number]>) => Result
+      >,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Result>>,
       DepsMap & Record<Key, Deps>,
