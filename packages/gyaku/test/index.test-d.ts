@@ -309,3 +309,78 @@ describe("ServiceRegistry.replaceValue", () => {
     expectTypeOf(services.db.query).toEqualTypeOf<(sql: string) => string[]>();
   });
 });
+
+describe("type instantiation cost", () => {
+  // Regression guard: a long `.service()` chain (here 60 registrations, some
+  // with deps) must not trip TS2589 "Type instantiation is excessively deep".
+  // It would if `Prettify` were ever applied to the accumulated `ServiceMap`
+  // that flows into the next call, since each step would re-flatten the whole
+  // growing map. Keep `Prettify` to leaf positions only (e.g. the deps param).
+  it("does not blow up on a long service chain", async () => {
+    const services = await createRegistry()
+      .service("s0", () => 0)
+      .service("s1", () => 1)
+      .service("s2", () => 2)
+      .service("s3", () => 3)
+      .service("s4", () => 4)
+      .service("s5", ["s4"], (deps) => deps.s4 + 5)
+      .service("s6", () => 6)
+      .service("s7", () => 7)
+      .service("s8", () => 8)
+      .service("s9", () => 9)
+      .service("s10", ["s9"], (deps) => deps.s9 + 10)
+      .service("s11", () => 11)
+      .service("s12", () => 12)
+      .service("s13", () => 13)
+      .service("s14", () => 14)
+      .service("s15", ["s14"], (deps) => deps.s14 + 15)
+      .service("s16", () => 16)
+      .service("s17", () => 17)
+      .service("s18", () => 18)
+      .service("s19", () => 19)
+      .service("s20", ["s19"], (deps) => deps.s19 + 20)
+      .service("s21", () => 21)
+      .service("s22", () => 22)
+      .service("s23", () => 23)
+      .service("s24", () => 24)
+      .service("s25", ["s24"], (deps) => deps.s24 + 25)
+      .service("s26", () => 26)
+      .service("s27", () => 27)
+      .service("s28", () => 28)
+      .service("s29", () => 29)
+      .service("s30", ["s29"], (deps) => deps.s29 + 30)
+      .service("s31", () => 31)
+      .service("s32", () => 32)
+      .service("s33", () => 33)
+      .service("s34", () => 34)
+      .service("s35", ["s34"], (deps) => deps.s34 + 35)
+      .service("s36", () => 36)
+      .service("s37", () => 37)
+      .service("s38", () => 38)
+      .service("s39", () => 39)
+      .service("s40", ["s39"], (deps) => deps.s39 + 40)
+      .service("s41", () => 41)
+      .service("s42", () => 42)
+      .service("s43", () => 43)
+      .service("s44", () => 44)
+      .service("s45", ["s44"], (deps) => deps.s44 + 45)
+      .service("s46", () => 46)
+      .service("s47", () => 47)
+      .service("s48", () => 48)
+      .service("s49", () => 49)
+      .service("s50", ["s49"], (deps) => deps.s49 + 50)
+      .service("s51", () => 51)
+      .service("s52", () => 52)
+      .service("s53", () => 53)
+      .service("s54", () => 54)
+      .service("s55", ["s54"], (deps) => deps.s54 + 55)
+      .service("s56", () => 56)
+      .service("s57", () => 57)
+      .service("s58", () => 58)
+      .service("s59", () => 59)
+      .resolve();
+
+    expectTypeOf(services.s0).toEqualTypeOf<number>();
+    expectTypeOf(services.s59).toEqualTypeOf<number>();
+  });
+});
