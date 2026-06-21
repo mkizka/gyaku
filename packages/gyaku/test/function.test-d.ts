@@ -1,15 +1,15 @@
 import { describe, expectTypeOf, it } from "vitest";
 
-import { asFactoryArgs, createRegistry } from "../src/index.ts";
+import { asFunctionArgs, createRegistry } from "../src/index.ts";
 
 type Logger = { log: (message: string) => void };
 type Db = { query: (sql: string) => string[] };
 
-describe("asFactoryArgs", () => {
+describe("asFunctionArgs", () => {
   it("infers the result type from the factory", () => {
     const createRepo = (logger: Logger, db: Db) => ({ logger, db });
 
-    const factory = asFactoryArgs(createRepo);
+    const factory = asFunctionArgs(createRepo);
     expectTypeOf(factory).returns.toEqualTypeOf<{ logger: Logger; db: Db }>();
   });
 
@@ -17,7 +17,7 @@ describe("asFactoryArgs", () => {
     const createCounter = () => ({ count: 0 });
 
     const services = await createRegistry()
-      .service("counter", asFactoryArgs(createCounter))
+      .service("counter", asFunctionArgs(createCounter))
       .resolve();
 
     expectTypeOf(services.counter).toEqualTypeOf<{ count: number }>();
@@ -28,7 +28,7 @@ describe("asFactoryArgs", () => {
       Promise.resolve({ query: (sql) => [sql] });
 
     const services = await createRegistry()
-      .service("db", asFactoryArgs(createDb))
+      .service("db", asFunctionArgs(createDb))
       .resolve();
 
     expectTypeOf(services.db).toEqualTypeOf<Db>();
@@ -40,7 +40,7 @@ describe("asFactoryArgs", () => {
     const services = await createRegistry()
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["logger", "db"], asFactoryArgs(createRepo))
+      .service("repo", ["logger", "db"], asFunctionArgs(createRepo))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<{ logger: Logger; db: Db }>();
@@ -53,7 +53,7 @@ describe("asFactoryArgs", () => {
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
       // @ts-expect-error "db" is missing from the declared deps but the factory requires it.
-      .service("repo", ["logger"], asFactoryArgs(createRepo));
+      .service("repo", ["logger"], asFunctionArgs(createRepo));
   });
 
   it("rejects registering when declared deps exceed factory parameters", () => {
@@ -63,7 +63,7 @@ describe("asFactoryArgs", () => {
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
       // @ts-expect-error createLogger2 takes only (Logger) but "db" is also declared.
-      .service("repo", ["logger", "db"], asFactoryArgs(createLogger2));
+      .service("repo", ["logger", "db"], asFunctionArgs(createLogger2));
   });
 
   it("accepts a factory whose parameter type is wider than the registered value type", () => {
@@ -73,7 +73,7 @@ describe("asFactoryArgs", () => {
     // "error" as const is a subtype of LogLevel, so passing createLogger2 is safe.
     createRegistry()
       .value("logLevel", "error" as const)
-      .service("logger", ["logLevel"], asFactoryArgs(createLogger2));
+      .service("logger", ["logLevel"], asFunctionArgs(createLogger2));
   });
 
   it("pins the result type to the type argument in the curried form", () => {
@@ -82,7 +82,7 @@ describe("asFactoryArgs", () => {
     }
     const createRepo = (db: Db): Repo => ({ find: () => db.query("select 1") });
 
-    const factory = asFactoryArgs<Repo>()(createRepo);
+    const factory = asFunctionArgs<Repo>()(createRepo);
     expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
 
@@ -95,7 +95,7 @@ describe("asFactoryArgs", () => {
 
     const services = await createRegistry()
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["db"], asFactoryArgs<Repo>()(createRepo))
+      .service("repo", ["db"], asFunctionArgs<Repo>()(createRepo))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();
@@ -113,7 +113,7 @@ describe("asFactoryArgs", () => {
       .service("logger", (): Logger => ({ log: () => undefined }))
       .service("db", (): Db => ({ query: (sql) => [sql] }))
       // @ts-expect-error "db" is missing from the declared deps.
-      .service("repo", ["logger"], asFactoryArgs<Repo>()(createRepo));
+      .service("repo", ["logger"], asFunctionArgs<Repo>()(createRepo));
   });
 
   it("rejects a factory whose result does not satisfy the type argument", () => {
@@ -123,6 +123,6 @@ describe("asFactoryArgs", () => {
     const createNotRepo = (db: Db) => ({ list: () => db.query("select 1") });
 
     // @ts-expect-error the result has no `find`, so it is not assignable to Repo.
-    asFactoryArgs<Repo>()(createNotRepo);
+    asFunctionArgs<Repo>()(createNotRepo);
   });
 });

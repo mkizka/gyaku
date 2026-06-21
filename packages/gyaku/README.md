@@ -147,23 +147,23 @@ const testRegistry = productionRegistry.replaceValue("userRepository", {
 
 It works with `asClassArgs` too: `asClassArgs<UserRepository>()(UserRepositoryImpl)`.
 
-### `asFactoryArgs(factory)`
+### `asFunctionArgs(fn)`
 
-The function counterpart of `asClassArgs`: it adapts a factory that takes
+The function counterpart of `asClassArgs`: it adapts a function that takes
 **positional** arguments into a service factory, spreading deps into the call in
 `deps` order. Only the result type is inferred, so `deps` must list the
-parameters in order. Async factories work too — the resolved value is awaited.
+parameters in order. Async functions work too — the resolved value is awaited.
 
 ```ts
 const createRepo = (logger: Logger, db: Db) => ({
   find: (sql: string) => db.query(sql),
 });
 
-createRegistry().service("repo", ["logger", "db"], asFactoryArgs(createRepo));
+createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
 ```
 
-With `asFactoryArgs<Type>()(factory)`, the registered type is pinned to `Type`
-instead of the inferred result, while `deps` is still inferred from the factory —
+With `asFunctionArgs<Type>()(fn)`, the registered type is pinned to `Type`
+instead of the inferred result, while `deps` is still inferred from the function —
 the same interface-pinning trick as `asClass<Interface>()`.
 
 ```ts
@@ -171,7 +171,7 @@ interface Repo {
   find: (sql: string) => string[];
 }
 
-createRegistry().service("repo", ["db"], asFactoryArgs<Repo>()(createRepo));
+createRegistry().service("repo", ["db"], asFunctionArgs<Repo>()(createRepo));
 ```
 
 ### Errors

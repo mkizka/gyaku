@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { asFactoryArgs, createRegistry } from "../src/index.ts";
+import { asFunctionArgs, createRegistry } from "../src/index.ts";
 
 type Logger = { log: (message: string) => void; lines: string[] };
 
@@ -9,7 +9,7 @@ const createLogger = (): Logger => {
   return { lines, log: (message) => lines.push(message) };
 };
 
-describe("asFactoryArgs", () => {
+describe("asFunctionArgs", () => {
   it("spreads resolved dependencies into positional factory args in deps order", async () => {
     const createPair = (first: string, second: string) => ({ first, second });
 
@@ -17,7 +17,7 @@ describe("asFactoryArgs", () => {
       .value("a", "value-a")
       .value("b", "value-b")
       // deps order ["b", "a"] maps to createPair(first = b, second = a).
-      .service("pair", ["b", "a"], asFactoryArgs(createPair))
+      .service("pair", ["b", "a"], asFunctionArgs(createPair))
       .resolve();
 
     expect(services.pair.first).toBe("value-b");
@@ -29,7 +29,7 @@ describe("asFactoryArgs", () => {
 
     await using services = await createRegistry()
       .service("logger", createLogger)
-      .service("holder", ["logger"], asFactoryArgs(createHolder))
+      .service("holder", ["logger"], asFunctionArgs(createHolder))
       .resolve();
 
     expect(services.holder.logger).toBe(services.logger);
@@ -39,7 +39,7 @@ describe("asFactoryArgs", () => {
     const createCounter = () => ({ count: 0 });
 
     await using services = await createRegistry()
-      .service("counter", asFactoryArgs(createCounter))
+      .service("counter", asFunctionArgs(createCounter))
       .resolve();
 
     expect(services.counter).toEqual({ count: 0 });
@@ -51,7 +51,7 @@ describe("asFactoryArgs", () => {
 
     await using services = await createRegistry()
       .value("name", "gyaku")
-      .service("greeting", ["name"], asFactoryArgs(createGreeting))
+      .service("greeting", ["name"], asFunctionArgs(createGreeting))
       .resolve();
 
     expect(services.greeting).toBe("hello, gyaku");
@@ -60,14 +60,14 @@ describe("asFactoryArgs", () => {
   it("builds the value when the adapted factory is called with empty deps", () => {
     const createCounter = () => ({ count: 0 });
 
-    expect(asFactoryArgs(createCounter)({})).toEqual({ count: 0 });
+    expect(asFunctionArgs(createCounter)({})).toEqual({ count: 0 });
   });
 });
 
-describe("asFactoryArgs<Type>() (curried)", () => {
+describe("asFunctionArgs<Type>() (curried)", () => {
   // The curried form returns the same factory as the direct form, so one case
   // is enough to cover its runtime behavior; the type contract is checked in
-  // factory.test-d.ts.
+  // function.test-d.ts.
   it("builds the value just like the direct form", async () => {
     interface Repo {
       find: (sql: string) => string[];
@@ -81,7 +81,7 @@ describe("asFactoryArgs<Type>() (curried)", () => {
 
     await using services = await createRegistry()
       .service("logger", createLogger)
-      .service("repo", ["logger"], asFactoryArgs<Repo>()(createRepo))
+      .service("repo", ["logger"], asFunctionArgs<Repo>()(createRepo))
       .resolve();
 
     expect(services.repo.find("select 1")).toEqual(["select 1"]);

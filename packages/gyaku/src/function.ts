@@ -11,13 +11,13 @@ type FunctionArgsFactory<Result> = <Args extends readonly unknown[]>(
   fn: (...args: Args) => Result | Promise<Result>,
 ) => PositionalFactory<Args, Result>;
 
-export function asFactoryArgs<Args extends readonly unknown[], Result>(
+export function asFunctionArgs<Args extends readonly unknown[], Result>(
   fn: (...args: Args) => Result,
 ): PositionalFactory<Args, Result>;
 
-export function asFactoryArgs<Result>(): FunctionArgsFactory<Result>;
+export function asFunctionArgs<Result>(): FunctionArgsFactory<Result>;
 
-export function asFactoryArgs(fn?: (...args: never[]) => unknown): unknown {
+export function asFunctionArgs(fn?: (...args: never[]) => unknown): unknown {
   if (fn === undefined) {
     return <Args extends readonly unknown[], Result>(
       f: (...args: Args) => Result | Promise<Result>,
