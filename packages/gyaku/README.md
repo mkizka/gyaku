@@ -90,6 +90,18 @@ const testRegistry = productionRegistry.replaceValue("db", stubDb);
 
 Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
+### `asFunctionArgs(fn)`
+
+Adapts a function that takes **positional** arguments into a service factory, spreading deps into the call in `deps` order. `deps` must list the parameters in order. Async functions work too — the resolved value is awaited.
+
+```ts
+const createRepo = (logger: Logger, db: Db) => ({
+  find: (sql: string) => db.query(sql),
+});
+
+createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
+```
+
 ### `asClass(Class)` / `asClassArgs(Class)`
 
 Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. `asClass` takes a single deps object and stays fully type-safe.

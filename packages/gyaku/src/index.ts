@@ -7,4 +7,5 @@ export {
   ServiceDisposeError,
   ServiceFactoryError,
 } from "./errors.js";
+export { asFunctionArgs } from "./function.js";
 export { createRegistry } from "./registry.js";
