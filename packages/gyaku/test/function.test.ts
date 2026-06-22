@@ -63,28 +63,3 @@ describe("asFunctionArgs", () => {
     expect(asFunctionArgs(createCounter)({})).toEqual({ count: 0 });
   });
 });
-
-describe("asFunctionArgs<Type>() (curried)", () => {
-  // The curried form returns the same factory as the direct form, so one case
-  // is enough to cover its runtime behavior; the type contract is checked in
-  // function.test-d.ts.
-  it("builds the value just like the direct form", async () => {
-    interface Repo {
-      find: (sql: string) => string[];
-    }
-    const createRepo = (logger: Logger): Repo => ({
-      find: (sql) => {
-        logger.log(sql);
-        return [sql];
-      },
-    });
-
-    await using services = await createRegistry()
-      .service("logger", createLogger)
-      .service("repo", ["logger"], asFunctionArgs<Repo>()(createRepo))
-      .resolve();
-
-    expect(services.repo.find("select 1")).toEqual(["select 1"]);
-    expect(services.logger.lines).toEqual(["select 1"]);
-  });
-});

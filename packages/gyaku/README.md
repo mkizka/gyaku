@@ -151,8 +151,8 @@ It works with `asClassArgs` too: `asClassArgs<UserRepository>()(UserRepositoryIm
 
 The function counterpart of `asClassArgs`: it adapts a function that takes
 **positional** arguments into a service factory, spreading deps into the call in
-`deps` order. Only the result type is inferred, so `deps` must list the
-parameters in order. Async functions work too — the resolved value is awaited.
+`deps` order. `deps` must list the parameters in order. Async functions work
+too — the resolved value is awaited.
 
 ```ts
 const createRepo = (logger: Logger, db: Db) => ({
@@ -162,16 +162,18 @@ const createRepo = (logger: Logger, db: Db) => ({
 createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
 ```
 
-With `asFunctionArgs<Type>()(fn)`, the registered type is pinned to `Type`
-instead of the inferred result, while `deps` is still inferred from the function —
-the same interface-pinning trick as `asClass<Interface>()`.
+Unlike `asClass`, no curried form is needed to pin the registered type to an
+interface — annotate the function's return type instead, and the result type
+follows it.
 
 ```ts
 interface Repo {
   find: (sql: string) => string[];
 }
 
-createRegistry().service("repo", ["db"], asFunctionArgs<Repo>()(createRepo));
+const createRepo = (db: Db): Repo => ({ find: (sql) => db.query(sql) });
+
+createRegistry().service("repo", ["db"], asFunctionArgs(createRepo));
 ```
 
 ### Errors

@@ -76,53 +76,19 @@ describe("asFunctionArgs", () => {
       .service("logger", ["logLevel"], asFunctionArgs(createLogger2));
   });
 
-  it("pins the result type to the type argument in the curried form", () => {
+  it("pins the registered type to the factory's return annotation", async () => {
     interface Repo {
       find: () => string[];
     }
+    // Annotating the return type pins the registered type to the interface,
+    // so no curried form is needed.
     const createRepo = (db: Db): Repo => ({ find: () => db.query("select 1") });
-
-    const factory = asFunctionArgs<Repo>()(createRepo);
-    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
-  });
-
-  it("pins an async factory's result to the type argument in the curried form", async () => {
-    interface Repo {
-      find: () => string[];
-    }
-    const createRepo = async (db: Db): Promise<Repo> =>
-      Promise.resolve({ find: () => db.query("select 1") });
 
     const services = await createRegistry()
       .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["db"], asFunctionArgs<Repo>()(createRepo))
+      .service("repo", ["db"], asFunctionArgs(createRepo))
       .resolve();
 
     expectTypeOf(services.repo).toEqualTypeOf<Repo>();
-  });
-
-  it("rejects deps mismatch in the curried form", () => {
-    interface Repo {
-      find: () => string[];
-    }
-    const createRepo = (logger: Logger, db: Db): Repo => ({
-      find: () => db.query("select 1"),
-    });
-
-    createRegistry()
-      .service("logger", (): Logger => ({ log: () => undefined }))
-      .service("db", (): Db => ({ query: (sql) => [sql] }))
-      // @ts-expect-error "db" is missing from the declared deps.
-      .service("repo", ["logger"], asFunctionArgs<Repo>()(createRepo));
-  });
-
-  it("rejects a factory whose result does not satisfy the type argument", () => {
-    interface Repo {
-      find: () => string[];
-    }
-    const createNotRepo = (db: Db) => ({ list: () => db.query("select 1") });
-
-    // @ts-expect-error the result has no `find`, so it is not assignable to Repo.
-    asFunctionArgs<Repo>()(createNotRepo);
   });
 });
