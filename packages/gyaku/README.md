@@ -90,6 +90,18 @@ const testRegistry = productionRegistry.replaceValue("db", stubDb);
 
 Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
+### `asFunctionArgs(fn)`
+
+Adapts a function that takes **positional** arguments into a service factory, spreading deps into the call in `deps` order. `deps` must list the parameters in order. Async functions work too — the resolved value is awaited.
+
+```ts
+const createRepo = (logger: Logger, db: Db) => ({
+  find: (sql: string) => db.query(sql),
+});
+
+createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
+```
+
 ### `asClass(Class)` / `asClassArgs(Class)`
 
 Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. `asClass` takes a single deps object and stays fully type-safe.
@@ -146,35 +158,6 @@ const testRegistry = productionRegistry.replaceValue("userRepository", {
 ```
 
 It works with `asClassArgs` too: `asClassArgs<UserRepository>()(UserRepositoryImpl)`.
-
-### `asFunctionArgs(fn)`
-
-The function counterpart of `asClassArgs`: it adapts a function that takes
-**positional** arguments into a service factory, spreading deps into the call in
-`deps` order. `deps` must list the parameters in order. Async functions work
-too — the resolved value is awaited.
-
-```ts
-const createRepo = (logger: Logger, db: Db) => ({
-  find: (sql: string) => db.query(sql),
-});
-
-createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
-```
-
-Unlike `asClass`, no curried form is needed to pin the registered type to an
-interface — annotate the function's return type instead, and the result type
-follows it.
-
-```ts
-interface Repo {
-  find: (sql: string) => string[];
-}
-
-const createRepo = (db: Db): Repo => ({ find: (sql) => db.query(sql) });
-
-createRegistry().service("repo", ["db"], asFunctionArgs(createRepo));
-```
 
 ### Errors
 
