@@ -90,75 +90,6 @@ const testRegistry = productionRegistry.replaceValue("db", stubDb);
 
 Resolves the graph and returns `Promise<Services & AsyncDisposable>`; factories run in parallel, `await using` disposes in reverse along the graph, and any failure auto-disposes what was already created.
 
-### `asFunctionArgs(fn)`
-
-Adapts a function that takes **positional** arguments into a service factory, spreading deps into the call in `deps` order. `deps` must list the parameters in order. Async functions work too — the resolved value is awaited.
-
-```ts
-const createRepo = (logger: Logger, db: Db) => ({
-  find: (sql: string) => db.query(sql),
-});
-
-createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
-```
-
-### `asClass(Class)` / `asClassArgs(Class)`
-
-Adapts a class constructor into a factory, so classes register without a `(deps) => new Foo(...)` wrapper. `asClass` takes a single deps object and stays fully type-safe.
-
-```ts
-class Greeter {
-  constructor(private deps: { logger: Logger }) {}
-}
-
-createRegistry()
-  .service("logger", () => new Logger())
-  .service("greeter", ["logger"], asClass(Greeter));
-```
-
-`asClassArgs` spreads deps into a positional constructor in `deps` order. Only the instance type is inferred, so `deps` must list the constructor's parameters in order.
-
-```ts
-class Greeter {
-  constructor(logger: Logger, db: Db) {}
-}
-
-createRegistry().service("greeter", ["logger", "db"], asClassArgs(Greeter));
-```
-
-With `asClass<Interface>()(Class)`, the registered type is pinned to `Interface` instead of the concrete class, while `deps` is still inferred from the constructor.
-
-This matters most for `.replaceService` / `.replaceValue`: a replacement must be assignable to the **originally registered type**. Pin a class to an interface and a test can swap in a stub that only has to satisfy that interface. Register the concrete class instead and the replacement would have to match the class down to its `#private` fields — usually impossible.
-
-```ts
-interface UserRepository {
-  find(id: number): Promise<User | undefined>;
-}
-
-class UserRepositoryImpl implements UserRepository {
-  constructor(private deps: { db: Db }) {}
-  find(id: number) {
-    return this.deps.db.findUser(id);
-  }
-}
-
-const productionRegistry = createRegistry()
-  .service("db", createDb)
-  // userRepository is pinned to UserRepository, not UserRepositoryImpl
-  .service(
-    "userRepository",
-    ["db"],
-    asClass<UserRepository>()(UserRepositoryImpl),
-  );
-
-// the stub only has to satisfy UserRepository
-const testRegistry = productionRegistry.replaceValue("userRepository", {
-  find: async (id) => ({ id, name: "stub" }),
-});
-```
-
-It works with `asClassArgs` too: `asClassArgs<UserRepository>()(UserRepositoryImpl)`.
-
 ### Errors
 
 All errors extend `GyakuError`.
@@ -188,6 +119,86 @@ try {
 - Re-registering a key throws; use `.replaceService` / `.replaceValue` to replace.
 - `then` is reserved (would make the services object look thenable).
 - Services object has a null prototype, so keys like `__proto__` are safe.
+
+## Migration helpers
+
+gyaku's first-class factory is a function taking a single deps object,
+`({ logger, db }) => ...`. These helpers adapt code that doesn't fit that
+shape — positional functions and classes — without rewriting it.
+
+### `asFunctionArgs(fn)`
+
+Wraps a function that takes **positional** arguments. `deps` lists those
+parameters in order.
+
+```ts
+const createRepo = (logger: Logger, db: Db) => ({
+  find: (sql: string) => db.query(sql),
+});
+
+createRegistry().service("repo", ["logger", "db"], asFunctionArgs(createRepo));
+```
+
+### `asClass(Class)`
+
+Wraps a class whose constructor takes a single deps object, so you skip the
+`(deps) => new Foo(deps)` wrapper. Fully type-safe.
+
+```ts
+class Greeter {
+  constructor(private deps: { logger: Logger }) {}
+}
+
+createRegistry().service("greeter", ["logger"], asClass(Greeter));
+```
+
+### `asClassArgs(Class)`
+
+Like `asFunctionArgs`, but for a class with a **positional** constructor.
+`deps` lists the constructor parameters in order.
+
+```ts
+class Greeter {
+  constructor(logger: Logger, db: Db) {}
+}
+
+createRegistry().service("greeter", ["logger", "db"], asClassArgs(Greeter));
+```
+
+### Pinning to an interface
+
+`asClass<Interface>()(Class)` registers the service as `Interface` instead of
+the concrete class (`asClassArgs` supports the same form). This matters for
+`.replaceService` / `.replaceValue`: a replacement must match the registered
+type, and matching a concrete class down to its `#private` fields is usually
+impossible. Pin to an interface and a stub only has to satisfy that interface.
+
+```ts
+interface UserRepository {
+  find(id: number): Promise<User | undefined>;
+}
+
+class UserRepositoryImpl implements UserRepository {
+  constructor(private deps: { db: Db }) {}
+  find(id: number) {
+    return this.deps.db.findUser(id);
+  }
+}
+
+const registry = createRegistry()
+  .service("db", createDb)
+  // pinned to UserRepository, not UserRepositoryImpl
+  .service(
+    "userRepository",
+    ["db"],
+    asClass<UserRepository>()(UserRepositoryImpl),
+  );
+
+// the stub only has to satisfy UserRepository
+const testRegistry = registry.replaceValue("userRepository", {
+  find: async (id) => ({ id, name: "stub" }),
+});
+```
 
 ## License
 
