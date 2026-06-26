@@ -122,10 +122,10 @@ try {
 
 ## Migration helpers
 
-A gyaku factory takes a single deps object: `({ logger, db }) => ...`. These
-helpers adapt functions and classes that don't follow that convention, so you
-can bring existing code into a registry without rewriting it. New code rarely
-needs them.
+Functions are gyaku's first-class unit: a factory is just a function taking a
+single deps object, `({ logger, db }) => ...`. These helpers adapt code that
+doesn't fit that shape — functions with positional arguments, and classes —
+so you can bring existing code into a registry without rewriting it.
 
 ### `asFunctionArgs(fn)`
 
