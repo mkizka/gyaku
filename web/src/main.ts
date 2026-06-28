@@ -4,14 +4,16 @@ const LANG_EN = {
   "gh-btn": "View on GitHub",
   "why-label": "Why gyaku?",
   "feat-0-title": "Fully type-safe",
-  "feat-0-desc": "Unregistered dependencies and duplicate keys are caught at the type level",
+  "feat-0-desc":
+    "Unregistered dependencies and duplicate keys are caught at the type level",
   "feat-1-title": "No decorators",
   "feat-1-desc": "No decorators or <code>reflect-metadata</code> needed",
   "feat-2-title": "Parallel resolution",
   "feat-2-desc":
     "Services with no shared dependencies are resolved in parallel following the dependency graph",
   "feat-3-title": "Auto cleanup with <code>await using</code>",
-  "feat-3-desc": "<code>using</code>-compatible values are disposed automatically in reverse dependency order",
+  "feat-3-desc":
+    "<code>using</code>-compatible values are disposed automatically in reverse dependency order",
   "feat-4-title": "<code>async</code> factory support",
   "feat-4-desc": "Factories can be written with or without <code>async</code>",
   "feat-5-title": "Testable by design",
