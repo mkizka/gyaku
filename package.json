@@ -9,7 +9,9 @@
   },
   "scripts": {
     "all": "run-s -l format build typecheck test test:*",
+    "web": "pnpm -C web run dev",
     "build": "pnpm -C packages/gyaku run build",
+    "build:web": "pnpm -C web run build",
     "format": "pnpm -r run format",
     "lint": "pnpm -r run lint",
     "test:example": "pnpm -r run start",

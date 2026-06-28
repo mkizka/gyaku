@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - examples/*
+  - web
 allowBuilds:
   esbuild: true
   rolldown: true

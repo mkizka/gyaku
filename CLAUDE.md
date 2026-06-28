@@ -8,6 +8,8 @@
   - startコマンドで実行可能な実装例
 - packages/gyaku
   - ライブラリ実装本体
+- web/
+  - GitHub Pagesを使用した紹介ページ
 
 ## バージョン更新方法
 

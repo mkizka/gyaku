@@ -1,0 +1,17 @@
+{
+  "name": "@gyaku/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier . --check",
+    "format": "prettier . --write"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.0",
+    "typescript": "^5.8.3",
+    "vite": "8.0.16"
+  }
+}

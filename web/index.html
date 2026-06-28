@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@gyaku/di — Tiny DI container for TypeScript</title>
+    <meta
+      name="description"
+      content="Gyaku (逆, inversion) is a tiny, modern DI container for TypeScript, built around await using."
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <!-- Language toggle -->
+    <div class="lang-toggle">
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="ja">JA</button>
+    </div>
+
+    <!-- Hero -->
+    <section class="hero">
+      <img class="logo" src="./icon.png" alt="gyaku logo" />
+      <h1><span>@gyaku/di</span></h1>
+      <p class="tagline" data-i18n="tagline">
+        Gyaku (逆, <em>inversion</em>) — a tiny, modern DI container for
+        TypeScript, built around <code>await using</code>.
+      </p>
+      <div class="cta">
+        <span class="install">
+          <span class="dollar">$</span>
+          <span class="cmd">npm install @gyaku/di</span>
+        </span>
+        <a
+          class="gh-btn"
+          href="https://github.com/mkizka/gyaku"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.09.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"
+            />
+          </svg>
+          <span data-i18n="gh-btn">View on GitHub</span>
+        </a>
+      </div>
+    </section>
+
+    <hr class="divider" />
+
+    <!-- Features -->
+    <section class="features">
+      <p class="section-label" data-i18n="why-label">Why gyaku?</p>
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3 data-i18n="feat-0-title">Fully type-safe</h3>
+          <p data-i18n="feat-0-desc">
+            Unknown deps and duplicate keys are caught at compile time. No
+            casts, no <code>any</code>.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-icon">✨</div>
+          <h3 data-i18n="feat-1-title">Zero boilerplate</h3>
+          <p data-i18n="feat-1-desc">
+            No decorators, no <code>reflect-metadata</code>. Just plain
+            TypeScript functions and classes.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3 data-i18n="feat-2-title">Parallel resolution</h3>
+          <p data-i18n="feat-2-desc">
+            Services without shared deps are resolved concurrently along the
+            dependency graph.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🗑️</div>
+          <h3 data-i18n="feat-3-title">
+            Auto-cleanup via <code>await using</code>
+          </h3>
+          <p data-i18n="feat-3-desc">
+            <code>using</code>-aware values are automatically disposed in
+            reverse dependency order.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <h3 data-i18n="feat-4-title">Sync &amp; async factories</h3>
+          <p data-i18n="feat-4-desc">
+            Factory functions can be written with or without async.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🧪</div>
+          <h3 data-i18n="feat-5-title">Testable by design</h3>
+          <p data-i18n="feat-5-desc">
+            <code>replaceService</code> / <code>replaceValue</code> swap any
+            dependency.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider" />
+
+    <!-- Code example -->
+    <section class="example">
+      <p class="section-label" data-i18n="quickstart-label">Quick start</p>
+      <pre><code><span class="kw">import</span> { <span class="fn">createRegistry</span> } <span class="kw">from</span> <span class="str">"@gyaku/di"</span>;
+
+<span class="kw">const</span> <span class="fn">createGreeter</span> = ({ name }<span class="op">:</span> { name<span class="op">:</span> <span class="ty">string</span> }) <span class="op">=&gt;</span> ({
+  say<span class="op">:</span> () <span class="op">=&gt;</span> console.<span class="fn">log</span>(<span class="str">`hello, ${name}`</span>),
+});
+
+<span class="kw">const</span> registry = <span class="fn">createRegistry</span>()
+  .<span class="fn">value</span>(<span class="str">"name"</span>, <span class="str">"gyaku"</span>)
+  .<span class="fn">service</span>(<span class="str">"greeter"</span>, [<span class="str">"name"</span>], createGreeter);
+
+<span class="kw">await using</span> services = <span class="kw">await</span> registry.<span class="fn">resolve</span>();
+services.greeter.<span class="fn">say</span>();
+<span class="cm">// hello, gyaku</span></code></pre>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>
+        <a href="https://github.com/mkizka/gyaku" target="_blank" rel="noopener"
+          >GitHub</a
+        >
+        &nbsp;·&nbsp;
+        <a
+          href="https://www.npmjs.com/package/@gyaku/di"
+          target="_blank"
+          rel="noopener"
+          >npm</a
+        >
+        &nbsp;·&nbsp; MIT License
+      </p>
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
