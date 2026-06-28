@@ -1,26 +1,22 @@
 const LANG_EN = {
   tagline:
-    "Gyaku (逆, <em>inversion</em>) — a tiny, modern DI container for TypeScript, built around <code>await using</code>.",
+    "Gyaku（逆、<em>inversion</em>）— A lightweight DI container for TypeScript, designed around <code>await using</code>.",
   "gh-btn": "View on GitHub",
   "why-label": "Why gyaku?",
   "feat-0-title": "Fully type-safe",
-  "feat-0-desc":
-    "Unknown deps and duplicate keys are caught at compile time. No casts, no <code>any</code>.",
-  "feat-1-title": "Zero boilerplate",
-  "feat-1-desc":
-    "No decorators, no <code>reflect-metadata</code>. Just plain TypeScript functions and classes.",
+  "feat-0-desc": "Unregistered dependencies and duplicate keys are caught at the type level",
+  "feat-1-title": "No decorators",
+  "feat-1-desc": "No decorators or <code>reflect-metadata</code> needed",
   "feat-2-title": "Parallel resolution",
   "feat-2-desc":
-    "Services without shared deps are resolved concurrently along the dependency graph.",
-  "feat-3-title": "Auto-cleanup via <code>await using</code>",
-  "feat-3-desc":
-    "<code>using</code>-aware values are automatically disposed in reverse dependency order.",
+    "Services with no shared dependencies are resolved in parallel following the dependency graph",
+  "feat-3-title": "Auto cleanup with <code>await using</code>",
+  "feat-3-desc": "<code>using</code>-compatible values are disposed automatically in reverse dependency order",
   "feat-4-title": "<code>async</code> factory support",
-  "feat-4-desc":
-    "Factory functions can be written with or without <code>async</code>.",
+  "feat-4-desc": "Factories can be written with or without <code>async</code>",
   "feat-5-title": "Testable by design",
   "feat-5-desc":
-    "<code>replaceService</code> / <code>replaceValue</code> swap any dependency.",
+    "Swap out dependencies easily with <code>replaceService</code> / <code>replaceValue</code>.",
   "quickstart-label": "Quick start",
 } as const;
 
