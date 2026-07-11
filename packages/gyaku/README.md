@@ -45,6 +45,12 @@ services.greeter.say();
 
 Runnable examples: [`examples/`](./examples).
 
+Using an AI coding agent? Install the [gyaku skill](https://github.com/mkizka/gyaku/tree/main/skills/gyaku) with [`npx skills`](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add mkizka/gyaku
+```
+
 ## API
 
 ### `createRegistry()`
