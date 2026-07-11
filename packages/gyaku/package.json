@@ -47,7 +47,7 @@
     "@mkizka/eslint-config": "10.0.0",
     "@stryker-mutator/core": "9.6.1",
     "@stryker-mutator/vitest-runner": "9.6.1",
-    "@types/node": "25.9.4",
+    "@types/node": "25.9.5",
     "eslint": "10.6.0",
     "prettier": "3.9.4",
     "prettier-plugin-pkg": "0.22.1",
