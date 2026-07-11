@@ -20,15 +20,12 @@ describe("ServiceRegistry.service", () => {
   it("accumulates services across chained registrations", async () => {
     const registry = createRegistry()
       .service("logger", (): Logger => ({ log: (message) => message }))
-      .service(
-        "db",
-        (): Promise<Db> => Promise.resolve({ query: (sql: string) => [sql] }),
+      .service("db", (): Promise<Db> =>
+        Promise.resolve({ query: (sql: string) => [sql] }),
       )
-      .service(
-        "repo",
-        ["db"],
-        ({ db }): Repo => ({ find: () => db.query("select 1") }),
-      );
+      .service("repo", ["db"], ({ db }): Repo => ({
+        find: () => db.query("select 1"),
+      }));
 
     const services = await registry.resolve();
 
@@ -137,10 +134,9 @@ describe("ServiceRegistry.value", () => {
 
 describe("ServiceRegistry.resolve", () => {
   it("returns a Promise of the service map intersected with AsyncDisposable", async () => {
-    const registry = createRegistry().service(
-      "logger",
-      (): Logger => ({ log: (m) => m }),
-    );
+    const registry = createRegistry().service("logger", (): Logger => ({
+      log: (m) => m,
+    }));
 
     expectTypeOf(registry.resolve).returns.toExtend<
       Promise<{ logger: Logger } & AsyncDisposable>
@@ -167,11 +163,9 @@ describe("ServiceRegistry.replaceService", () => {
   it("inherits the original service's deps shape", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
-      .service(
-        "db",
-        ["logger"],
-        ({ logger }): Db => ({ query: (sql) => [logger.log(sql)] }),
-      )
+      .service("db", ["logger"], ({ logger }): Db => ({
+        query: (sql) => [logger.log(sql)],
+      }))
       .replaceService("db", (deps) => {
         expectTypeOf(deps).toEqualTypeOf<{ logger: Logger }>();
         return { query: (sql) => [sql] };
