@@ -490,10 +490,10 @@ describe("createRegistry", () => {
     expect(services.db.query("select 1")).toBe("log:replaced:select 1");
   });
 
-  it("replaces with a stub depending on a service registered after the original", async () => {
+  it("replaces with a stub depending on a service registered earlier", async () => {
     const registry = createRegistry()
-      .service("db", () => ({ query: (sql: string) => `real:${sql}` }))
-      .service("config", () => ({ prefix: "cfg" }));
+      .service("config", () => ({ prefix: "cfg" }))
+      .service("db", () => ({ query: (sql: string) => `real:${sql}` }));
 
     const replaced = registry.replaceService(
       "db",
@@ -508,7 +508,7 @@ describe("createRegistry", () => {
     expect(services.db.query("select 1")).toBe("cfg:select 1");
   });
 
-  it("allows depending on a service whose own dependencies do not lead back to it", async () => {
+  it("resolves a multi-hop dependency chain through a replaced service", async () => {
     const registry = createRegistry()
       .service("c", () => "c")
       .service("b", ["c"], ({ c }) => `b:${c}`)
@@ -521,7 +521,7 @@ describe("createRegistry", () => {
     expect(services.a).toBe("a:b:c");
   });
 
-  it("rejects a replacement that would create a circular dependency", () => {
+  it("rejects a replacement that depends on a service registered after it", () => {
     const registry = createRegistry()
       .service("a", () => "a")
       .service("b", ["a"], ({ a }) => `b:${a}`);
@@ -532,7 +532,8 @@ describe("createRegistry", () => {
 
     expect(error).toBeInstanceOf(RegistryError);
     expect(error).toMatchObject({
-      message: 'Service "a" cannot depend on "b", which depends on "a"',
+      message:
+        'Service "a" cannot depend on "b", which was registered after it',
     });
   });
 

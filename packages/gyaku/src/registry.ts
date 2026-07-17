@@ -191,25 +191,6 @@ const validateDependencies = (
   }
 };
 
-// Shares `visited` across calls for the same replaceService() so a diamond-shaped
-// dependency graph is walked once instead of revisiting shared ancestors per dep.
-const dependsOn = (
-  byKey: ReadonlyMap<string, ServiceDefinition>,
-  from: string,
-  target: string,
-  visited: Set<string>,
-): boolean => {
-  if (from === target) return true;
-  if (visited.has(from)) return false;
-  visited.add(from);
-
-  // `from` is always a key already validated by validateDependencies(), so it
-  // is guaranteed to be present in `byKey`.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- see above.
-  const def = byKey.get(from)!;
-  return def.dependencies.some((dep) => dependsOn(byKey, dep, target, visited));
-};
-
 const makeRegistry = <
   ServiceMap extends ServiceMapBase,
   OriginalMap extends ServiceMapBase,
@@ -267,12 +248,14 @@ const makeRegistry = <
       }
       validateDependencies(definitions, key, dependencies);
 
-      const byKey = new Map(definitions.map((d) => [d.key, d]));
-      const visited = new Set<string>();
+      // Mirrors .service(): a dep must already occupy an earlier slot than
+      // the service being replaced, so the dependency graph stays acyclic
+      // by construction instead of needing a cycle check.
       for (const dep of dependencies) {
-        if (dependsOn(byKey, dep, key, visited)) {
+        const depIndex = definitions.findIndex((d) => d.key === dep);
+        if (depIndex > index) {
           throw new RegistryError(
-            `Service "${key}" cannot depend on "${dep}", which depends on "${key}"`,
+            `Service "${key}" cannot depend on "${dep}", which was registered after it`,
           );
         }
       }
@@ -294,21 +277,18 @@ const makeRegistry = <
       const services: ServiceMapBase = Object.create(null);
       const factoryErrors: ServiceFactoryError[] = [];
       const promises = new Map<string, Promise<unknown>>();
-      const byKey = new Map(definitions.map((d) => [d.key, d]));
 
-      const getPromise = (key: string): Promise<unknown> => {
-        const existing = promises.get(key);
-        if (existing) return existing;
+      for (const { key, dependencies, factory } of definitions) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- deps are validated to be registered earlier, so the promise is set in a previous iteration.
+        const depPromises = dependencies.map((d) => promises.get(d)!);
 
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- deps are validated to reference a registered key at .service()/.replaceService() call time.
-        const def = byKey.get(key)!;
         const promise = (async () => {
-          await Promise.all(def.dependencies.map(getPromise));
+          await Promise.all(depPromises);
           const deps = Object.fromEntries(
-            def.dependencies.map((d) => [d, services[d]]),
+            dependencies.map((d) => [d, services[d]]),
           );
           try {
-            const value = await def.factory(deps);
+            const value = await factory(deps);
             services[key] = value;
             return value;
           } catch (error) {
@@ -319,10 +299,9 @@ const makeRegistry = <
         })();
 
         promises.set(key, promise);
-        return promise;
-      };
+      }
 
-      await Promise.allSettled(definitions.map((d) => getPromise(d.key)));
+      await Promise.allSettled(promises.values());
 
       if (factoryErrors.length > 0) {
         const disposeErrors = await disposeAll(services, definitions);
