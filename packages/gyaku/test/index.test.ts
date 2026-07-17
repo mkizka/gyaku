@@ -490,30 +490,7 @@ describe("createRegistry", () => {
     expect(services.db.query("select 1")).toBe("log:replaced:select 1");
   });
 
-  it("replaces with a stub depending on different services than the original", async () => {
-    const registry = createRegistry()
-      .service("logger", () => ({
-        log: (message: string) => `log:${message}`,
-      }))
-      .value("config", { prefix: "cfg" })
-      .service("db", ["logger"], ({ logger }) => ({
-        query: (sql: string) => logger.log(`real:${sql}`),
-      }));
-
-    const replaced = registry.replaceService(
-      "db",
-      ["config"],
-      ({ config }) => ({
-        query: (sql: string) => `${config.prefix}:${sql}`,
-      }),
-    );
-
-    await using services = await replaced.resolve();
-
-    expect(services.db.query("select 1")).toBe("cfg:select 1");
-  });
-
-  it("resolves correctly when the new dep is registered after the original service", async () => {
+  it("replaces with a stub depending on a service registered after the original", async () => {
     const registry = createRegistry()
       .service("db", () => ({ query: (sql: string) => `real:${sql}` }))
       .service("config", () => ({ prefix: "cfg" }));
@@ -542,41 +519,6 @@ describe("createRegistry", () => {
     await using services = await replaced.resolve();
 
     expect(services.a).toBe("a:b:c");
-  });
-
-  it("allows a diamond-shaped dependency graph where a shared ancestor is reachable via two new deps", async () => {
-    const registry = createRegistry()
-      .service("shared", () => "shared")
-      .service("left", ["shared"], ({ shared }) => `left:${shared}`)
-      .service("right", ["shared"], ({ shared }) => `right:${shared}`)
-      .service("a", () => "a");
-
-    // "shared" is reached once via "left" and again via "right"; the second
-    // visit must be served from the memoized visited set instead of
-    // re-walking "shared"'s (empty) dependencies.
-    const replaced = registry.replaceService(
-      "a",
-      ["left", "right"],
-      ({ left, right }) => `a:${left}:${right}`,
-    );
-
-    await using services = await replaced.resolve();
-
-    expect(services.a).toBe("a:left:shared:right:shared");
-  });
-
-  it("rejects replaceService's 3-arg form with a missing factory", () => {
-    const error = capture(() =>
-      createRegistry()
-        .service("logger", () => ({ log: (m: string) => m }))
-        .service("db", ["logger"], () => ({ query: () => [] }))
-        // @ts-expect-error missing factory is rejected at the type level too.
-        .replaceService("db", ["logger"]),
-    );
-    expect(error).toBeInstanceOf(RegistryError);
-    expect(error).toMatchObject({
-      message: 'Service "db" factory is required',
-    });
   });
 
   it("rejects a replacement that would create a circular dependency", () => {

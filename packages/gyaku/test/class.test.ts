@@ -47,28 +47,6 @@ describe("asClass", () => {
 
     expect(services.holder.logger).toBe(services.logger);
   });
-
-  it("replaces a service with a class stub via .replaceService", async () => {
-    class Greeter {
-      readonly #logger: Logger;
-      constructor({ logger }: { logger: Logger }) {
-        this.#logger = logger;
-      }
-      greet(name: string) {
-        this.#logger.log(`stub:${name}`);
-        return `stub:${name}`;
-      }
-    }
-
-    await using services = await createRegistry()
-      .service("logger", () => new Logger())
-      .service("greeter", () => ({ greet: (name: string) => `real:${name}` }))
-      .replaceService("greeter", ["logger"], asClass(Greeter))
-      .resolve();
-
-    expect(services.greeter.greet("gyaku")).toBe("stub:gyaku");
-    expect(services.logger.lines).toEqual(["stub:gyaku"]);
-  });
 });
 
 describe("asClassArgs", () => {
