@@ -215,6 +215,14 @@ describe("ServiceRegistry.replaceService", () => {
       .replaceService("logger", ["missing"], () => ({ log: (m) => m }));
   });
 
+  it("rejects depending on a key registered after the one being replaced", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error "db" is registered after "logger".
+      .replaceService("logger", ["db"], () => ({ log: (m) => m }));
+  });
+
   it("preserves the existing Services type", () => {
     const registry = createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))

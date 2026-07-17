@@ -37,6 +37,11 @@ type ServiceDefinition = {
   factory: ServiceFactory;
 };
 
+// Per key, the union of keys that already existed when that key was first
+// registered via `.service()`. Lets `replaceService`'s 3-arg form restrict
+// `Deps` to keys registered before the one being replaced, at compile time.
+type ScopeBase = Record<string, string>;
+
 type ServiceRegistry<
   ServiceMap extends ServiceMapBase,
   // Original registration type per key. `replaceService` judges replacements
@@ -44,6 +49,7 @@ type ServiceRegistry<
   // checked against the original contract — keeping dependents safe and letting
   // the same key be replaced repeatedly without each step narrowing the next.
   OriginalMap extends ServiceMapBase,
+  Scope extends ScopeBase,
 > = {
   service: {
     // Must stay first: a one-arg function is assignable to a zero-arg
@@ -53,14 +59,16 @@ type ServiceRegistry<
       factory: PositionalFactory<[], Instance>,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Instance>>,
-      OriginalMap & Record<Key, Awaited<Instance>>
+      OriginalMap & Record<Key, Awaited<Instance>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <const Key extends string, Result>(
       key: UnregisteredKey<Key, ServiceMap>,
       factory: () => Result,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Result>>,
-      OriginalMap & Record<Key, Awaited<Result>>
+      OriginalMap & Record<Key, Awaited<Result>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <
       const Key extends string,
@@ -75,7 +83,8 @@ type ServiceRegistry<
       >,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Instance>>,
-      OriginalMap & Record<Key, Awaited<Instance>>
+      OriginalMap & Record<Key, Awaited<Instance>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <
       const Key extends string,
@@ -90,7 +99,8 @@ type ServiceRegistry<
       >,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Result>>,
-      OriginalMap & Record<Key, Awaited<Result>>
+      OriginalMap & Record<Key, Awaited<Result>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
   };
 
@@ -99,7 +109,8 @@ type ServiceRegistry<
     instance: T,
   ) => ServiceRegistry<
     ServiceMap & Record<Key, T>,
-    OriginalMap & Record<Key, T>
+    OriginalMap & Record<Key, T>,
+    Scope & Record<Key, RegisteredKey<ServiceMap>>
   >;
 
   replaceService: {
@@ -113,7 +124,8 @@ type ServiceRegistry<
       factory: PositionalFactory<[], Instance>,
     ): ServiceRegistry<
       ReplaceValue<ServiceMap, Key, Awaited<Instance>>,
-      OriginalMap
+      OriginalMap,
+      Scope
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
@@ -121,10 +133,14 @@ type ServiceRegistry<
     >(
       key: Key,
       factory: () => Result | Promise<Result>,
-    ): ServiceRegistry<ReplaceValue<ServiceMap, Key, Result>, OriginalMap>;
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Result>,
+      OriginalMap,
+      Scope
+    >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly RegisteredKey<ServiceMap>[],
+      const Deps extends readonly Scope[Key][],
       Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
     >(
       key: Key,
@@ -135,11 +151,12 @@ type ServiceRegistry<
       >,
     ): ServiceRegistry<
       ReplaceValue<ServiceMap, Key, Awaited<Instance>>,
-      OriginalMap
+      OriginalMap,
+      Scope
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly RegisteredKey<ServiceMap>[],
+      const Deps extends readonly Scope[Key][],
       Result extends OriginalMap[Key],
     >(
       key: Key,
@@ -148,7 +165,11 @@ type ServiceRegistry<
       factory: NotPositionalFactory<
         (deps: Pick<ServiceMap, Deps[number]>) => Result | Promise<Result>
       >,
-    ): ServiceRegistry<ReplaceValue<ServiceMap, Key, Result>, OriginalMap>;
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Result>,
+      OriginalMap,
+      Scope
+    >;
   };
 
   replaceValue: <
@@ -157,7 +178,7 @@ type ServiceRegistry<
   >(
     key: Key,
     instance: T,
-  ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, OriginalMap>;
+  ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, OriginalMap, Scope>;
 
   resolve: () => Promise<ServiceMap & AsyncDisposable>;
 };
@@ -194,9 +215,10 @@ const validateDependencies = (
 const makeRegistry = <
   ServiceMap extends ServiceMapBase,
   OriginalMap extends ServiceMapBase,
+  Scope extends ScopeBase,
 >(
   definitions: readonly ServiceDefinition[],
-): ServiceRegistry<ServiceMap, OriginalMap> => {
+): ServiceRegistry<ServiceMap, OriginalMap, Scope> => {
   const registry = {
     service(
       key: string,
@@ -323,10 +345,11 @@ const makeRegistry = <
   };
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The structural registry satisfies the overloaded ServiceRegistry type at runtime.
-  return registry as unknown as ServiceRegistry<ServiceMap, OriginalMap>;
+  return registry as unknown as ServiceRegistry<ServiceMap, OriginalMap, Scope>;
 };
 
 export const createRegistry = (): ServiceRegistry<
+  Record<never, never>,
   Record<never, never>,
   Record<never, never>
 > => makeRegistry([]);

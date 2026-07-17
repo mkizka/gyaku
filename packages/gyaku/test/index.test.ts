@@ -527,7 +527,8 @@ describe("createRegistry", () => {
       .service("b", ["a"], ({ a }) => `b:${a}`);
 
     const error = capture(() =>
-      registry.replaceService("a", ["b"], ({ b }) => `a:${b}`),
+      // @ts-expect-error "b" was registered after "a", so this is rejected at the type level too.
+      registry.replaceService("a", ["b"], () => "a"),
     );
 
     expect(error).toBeInstanceOf(RegistryError);
@@ -540,7 +541,10 @@ describe("createRegistry", () => {
   it("rejects a replacement that depends on itself", () => {
     const registry = createRegistry().service("a", () => "a");
 
-    const error = capture(() => registry.replaceService("a", ["a"], () => "a"));
+    const error = capture(() =>
+      // @ts-expect-error "a" cannot depend on itself, rejected at the type level too.
+      registry.replaceService("a", ["a"], () => "a"),
+    );
 
     expect(error).toBeInstanceOf(RegistryError);
     expect(error).toMatchObject({
