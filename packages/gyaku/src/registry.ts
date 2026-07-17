@@ -133,9 +133,6 @@ type ServiceRegistry<
     instance: T,
   ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, DepsMap, OriginalMap>;
 
-  /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
-  override: ServiceRegistry<ServiceMap, DepsMap, OriginalMap>["replaceService"];
-
   resolve: () => Promise<ServiceMap & AsyncDisposable>;
 };
 
@@ -202,10 +199,6 @@ const makeRegistry = <
 
     replaceValue(key: string, instance: unknown) {
       return registry.replaceService(key, () => instance);
-    },
-
-    override(key: string, factory: ServiceFactory) {
-      return registry.replaceService(key, factory);
     },
 
     async resolve() {
