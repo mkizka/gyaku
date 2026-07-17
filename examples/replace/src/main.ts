@@ -28,6 +28,10 @@ const createDb = async ({ logger }: { logger: Logger }): Promise<Db> => {
   };
 };
 
+type Clock = { now: () => Date };
+
+const createClock = (): Clock => ({ now: () => new Date() });
+
 type UserRepository = {
   find: (id: number) => Promise<User | undefined>;
 };
@@ -39,19 +43,26 @@ const createUserRepository = ({ db }: { db: Db }): UserRepository => ({
 const productionRegistry = createRegistry()
   .service("logger", createLogger)
   .service("db", ["logger"], createDb)
+  .service("clock", createClock)
   .service("userRepository", ["db"], createUserRepository);
 
-// Returns more than `Db`: `replaceService` widens the service type, so the
-// extra `seed`/`clear` are callable on the resolved service.
-const createStubDb = ({ logger }: { logger: Logger }) => {
+// Depends on `clock`, not `logger` — a different dependency than the original
+// `db` registration used, and one registered *after* `db` in the chain above.
+// `replaceService` isn't limited to the original deps or their position.
+// The return type also widens: `seed`/`clear`/`createdAt` become callable on
+// the resolved service.
+const createStubDb = ({ clock }: { clock: Clock }) => {
   const users = new Map<number, User>();
-  logger.log("stub db ready");
+  const createdAt = clock.now();
   return {
     findUser: async (id: number) => users.get(id),
     seed: (user: User) => users.set(user.id, user),
     clear: () => users.clear(),
+    createdAt,
     [Symbol.asyncDispose]: async () => {
-      logger.log("stub db disposed");
+      console.log(
+        `[test] stub db disposed (created ${createdAt.toISOString()})`,
+      );
     },
   };
 };
@@ -61,7 +72,7 @@ const testLogger: Logger = {
 };
 
 const testRegistry = productionRegistry
-  .replaceService("db", createStubDb)
+  .replaceService("db", ["clock"], createStubDb)
   .replaceValue("logger", testLogger);
 
 const main = async () => {

@@ -20,12 +20,17 @@ describe("ServiceRegistry.service", () => {
   it("accumulates services across chained registrations", async () => {
     const registry = createRegistry()
       .service("logger", (): Logger => ({ log: (message) => message }))
-      .service("db", (): Promise<Db> =>
-        Promise.resolve({ query: (sql: string) => [sql] }),
+      .service(
+        "db",
+        (): Promise<Db> => Promise.resolve({ query: (sql: string) => [sql] }),
       )
-      .service("repo", ["db"], ({ db }): Repo => ({
-        find: () => db.query("select 1"),
-      }));
+      .service(
+        "repo",
+        ["db"],
+        ({ db }): Repo => ({
+          find: () => db.query("select 1"),
+        }),
+      );
 
     const services = await registry.resolve();
 
@@ -134,9 +139,12 @@ describe("ServiceRegistry.value", () => {
 
 describe("ServiceRegistry.resolve", () => {
   it("returns a Promise of the service map intersected with AsyncDisposable", async () => {
-    const registry = createRegistry().service("logger", (): Logger => ({
-      log: (m) => m,
-    }));
+    const registry = createRegistry().service(
+      "logger",
+      (): Logger => ({
+        log: (m) => m,
+      }),
+    );
 
     expectTypeOf(registry.resolve).returns.toExtend<
       Promise<{ logger: Logger } & AsyncDisposable>
@@ -160,13 +168,17 @@ describe("ServiceRegistry.resolve", () => {
 });
 
 describe("ServiceRegistry.replaceService", () => {
-  it("inherits the original service's deps shape", () => {
+  it("accepts an explicit dependency list that matches deps() shape", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
-      .service("db", ["logger"], ({ logger }): Db => ({
-        query: (sql) => [logger.log(sql)],
-      }))
-      .replaceService("db", (deps) => {
+      .service(
+        "db",
+        ["logger"],
+        ({ logger }): Db => ({
+          query: (sql) => [logger.log(sql)],
+        }),
+      )
+      .replaceService("db", ["logger"], (deps) => {
         expectTypeOf(deps).toEqualTypeOf<{ logger: Logger }>();
         return { query: (sql) => [sql] };
       });
@@ -176,6 +188,59 @@ describe("ServiceRegistry.replaceService", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
       .replaceService("logger", () => ({ log: (m) => m }));
+  });
+
+  it("rejects a factory expecting deps when none are declared", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .service(
+        "db",
+        ["logger"],
+        ({ logger }): Db => ({
+          query: (sql) => [logger.log(sql)],
+        }),
+      )
+      // @ts-expect-error no deps list was passed, so the factory must be zero-arg.
+      .replaceService("db", ({ logger }: { logger: Logger }) => ({
+        query: (sql: string) => [logger.log(sql)],
+      }));
+  });
+
+  it("accepts a dependency the service was not originally registered with", () => {
+    type Clock = { now: () => string };
+
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .service("clock", (): Clock => ({ now: () => "now" }))
+      .service(
+        "db",
+        ["logger"],
+        ({ logger }): Db => ({
+          query: (sql) => [logger.log(sql)],
+        }),
+      )
+      .replaceService("db", ["clock"], (deps) => {
+        expectTypeOf(deps).toEqualTypeOf<{ clock: Clock }>();
+        return { query: (sql) => [sql] };
+      });
+  });
+
+  it("rejects a service depending on itself", () => {
+    createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error a service cannot depend on itself.
+      .replaceService("db", ["db"], ({ db }: { db: Db }) => ({
+        query: (sql: string) => db.query(sql),
+      }));
+  });
+
+  it("rejects a dependency that has not been registered", () => {
+    createRegistry()
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      // @ts-expect-error "missing" has not been registered.
+      .replaceService("db", ["missing"], () => ({
+        query: (sql) => [sql],
+      }));
   });
 
   it("rejects replacing an unregistered key", () => {

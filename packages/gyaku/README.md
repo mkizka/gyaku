@@ -76,12 +76,21 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
-### `.replaceService(key, factory)`
+### `.replaceService(key, factory)` / `.replaceService(key, deps, factory)`
 
-Swaps a registered factory in place, keeping the original deps and return type.
+Swaps a registered factory in place, keeping the original return type. Takes
+the same `(key, factory)` / `(key, deps, factory)` shapes as `.service` — the
+replacement's deps don't have to match the original registration, and can
+reference any service registered anywhere in the chain (not just ones
+registered before the original). Omit `deps` for a zero-dependency
+replacement.
 
 ```ts
-const testRegistry = productionRegistry.replaceService("db", createStubDb);
+const testRegistry = productionRegistry.replaceService(
+  "db",
+  ["logger"],
+  createStubDb,
+);
 ```
 
 ### `.replaceValue(key, instance)`

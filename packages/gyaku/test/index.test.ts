@@ -450,7 +450,7 @@ describe("createRegistry", () => {
     expect(services.second.first.tag).toBe("first");
   });
 
-  it("inherits the original service's dependencies in .replaceService", async () => {
+  it("accepts an explicit dependency list in .replaceService", async () => {
     const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `log:${message}`,
@@ -459,13 +459,122 @@ describe("createRegistry", () => {
         query: (sql: string) => logger.log(`real:${sql}`),
       }));
 
-    const replaced = registry.replaceService("db", ({ logger }) => ({
-      query: (sql: string) => logger.log(`replaced:${sql}`),
-    }));
+    const replaced = registry.replaceService(
+      "db",
+      ["logger"],
+      ({ logger }) => ({
+        query: (sql: string) => logger.log(`replaced:${sql}`),
+      }),
+    );
 
     await using services = await replaced.resolve();
 
     expect(services.db.query("select 1")).toBe("log:replaced:select 1");
+  });
+
+  it("replaces a service with a dependency it did not originally have", async () => {
+    const registry = createRegistry()
+      .service("logger", () => ({
+        log: (message: string) => `log:${message}`,
+      }))
+      .service("clock", () => ({ now: () => "2024-01-01" }))
+      .service("db", ["logger"], ({ logger }) => ({
+        query: (sql: string) => logger.log(`real:${sql}`),
+      }));
+
+    const replaced = registry.replaceService("db", ["clock"], ({ clock }) => ({
+      query: (sql: string) => `${clock.now()}:${sql}`,
+    }));
+
+    await using services = await replaced.resolve();
+
+    expect(services.db.query("select 1")).toBe("2024-01-01:select 1");
+  });
+
+  it("resolves a replacement dependency registered after the replaced key", async () => {
+    const registry = createRegistry()
+      .service("db", () => ({
+        query: (sql: string) => `real:${sql}`,
+      }))
+      .service("clock", () => ({ now: () => "2024-01-01" }))
+      .replaceService("db", ["clock"], ({ clock }) => ({
+        query: (sql: string) => `${clock.now()}:${sql}`,
+      }));
+
+    await using services = await registry.resolve();
+
+    expect(services.db.query("select 1")).toBe("2024-01-01:select 1");
+  });
+
+  it("rejects a replacement that depends on an unregistered service", () => {
+    const registry = createRegistry().service("db", () => ({
+      query: (sql: string) => sql,
+    }));
+
+    const error = capture(() =>
+      // @ts-expect-error "missing" has not been registered.
+      registry.replaceService("db", ["missing"], () => ({
+        query: (sql: string) => sql,
+      })),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "db" depends on unregistered service "missing"',
+    });
+  });
+
+  it("rejects a .replaceService call with a deps list but no factory", () => {
+    const registry = createRegistry()
+      .service("logger", () => ({ log: (m: string) => m }))
+      .service("db", () => ({ query: (sql: string) => sql }));
+
+    const error = capture(() =>
+      // @ts-expect-error missing factory is rejected at the type level too.
+      registry.replaceService("db", ["logger"]),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "db" factory is required',
+    });
+  });
+
+  it("rejects a replacement that depends on itself", () => {
+    const registry = createRegistry().service("db", () => ({
+      query: (sql: string) => sql,
+    }));
+
+    const error = capture(() =>
+      // @ts-expect-error a service cannot depend on itself.
+      registry.replaceService("db", ["db"], () => ({
+        query: (sql: string) => sql,
+      })),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "db" has a circular dependency',
+    });
+  });
+
+  it("rejects a replacement that introduces a circular dependency", () => {
+    // "unrelated" is registered first and listed before "b" in the new deps,
+    // so a non-cyclic dependency is walked (and found clean) before the
+    // cyclic one, on both the outer scan and the inner dependency walk.
+    const registry = createRegistry()
+      .service("unrelated", () => "unrelated")
+      .service("a", () => "a")
+      .service("b", ["a"], ({ a }) => `${a}-b`);
+
+    const error = capture(() =>
+      registry.replaceService(
+        "a",
+        ["unrelated", "b"],
+        ({ unrelated, b }) => `${unrelated}-${b}-a`,
+      ),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "a" has a circular dependency',
+    });
   });
 
   it("applies the latest replacement when called multiple times", async () => {
