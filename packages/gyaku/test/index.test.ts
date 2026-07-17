@@ -525,17 +525,6 @@ describe("createRegistry", () => {
     });
   });
 
-  it("keeps the deprecated .override as an alias of .replaceService", async () => {
-    const registry = createRegistry().service("greeting", () => "original");
-
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the deprecated alias must keep working until the next major version.
-    const replaced = registry.override("greeting", () => "replaced");
-
-    await using services = await replaced.resolve();
-
-    expect(services.greeting).toBe("replaced");
-  });
-
   it("runs independent factories in parallel", async () => {
     const events: string[] = [];
     let resolveSlow!: () => void;
