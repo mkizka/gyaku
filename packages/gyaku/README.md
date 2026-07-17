@@ -78,12 +78,9 @@ const registry = createRegistry()
 
 ### `.replaceService(key, factory)` / `.replaceService(key, deps, factory)`
 
-Swaps a registered factory in place, following the same rules as `.service`:
-the 2-arg form takes no deps, the 3-arg form receives exactly the listed
-deps — which can be a different set than the original registration used.
-`asClass` / `asFunctionArgs` / `asClassArgs` factories work here too. Either
-way, the replacement's return type must still satisfy the original service's
-contract.
+Swaps a registered factory in place, following the same rules as `.service` —
+deps can differ from the original registration. The replacement's return
+type must still satisfy the original contract.
 
 ```ts
 const testRegistry = productionRegistry.replaceService(
