@@ -450,7 +450,7 @@ describe("createRegistry", () => {
     expect(services.second.first.tag).toBe("first");
   });
 
-  it("inherits the original service's dependencies in .replaceService", async () => {
+  it("takes no deps in the 2-arg form, even if the original service had deps", async () => {
     const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `log:${message}`,
@@ -459,13 +459,97 @@ describe("createRegistry", () => {
         query: (sql: string) => logger.log(`real:${sql}`),
       }));
 
-    const replaced = registry.replaceService("db", ({ logger }) => ({
-      query: (sql: string) => logger.log(`replaced:${sql}`),
+    const replaced = registry.replaceService("db", () => ({
+      query: (sql: string) => `stub:${sql}`,
     }));
 
     await using services = await replaced.resolve();
 
+    expect(services.db.query("select 1")).toBe("stub:select 1");
+  });
+
+  it("receives exactly the deps passed to the 3-arg form", async () => {
+    const registry = createRegistry()
+      .service("logger", () => ({
+        log: (message: string) => `log:${message}`,
+      }))
+      .service("db", ["logger"], ({ logger }) => ({
+        query: (sql: string) => logger.log(`real:${sql}`),
+      }));
+
+    const replaced = registry.replaceService(
+      "db",
+      ["logger"],
+      ({ logger }) => ({
+        query: (sql: string) => logger.log(`replaced:${sql}`),
+      }),
+    );
+
+    await using services = await replaced.resolve();
+
     expect(services.db.query("select 1")).toBe("log:replaced:select 1");
+  });
+
+  it("replaces with a stub depending on a service registered earlier", async () => {
+    const registry = createRegistry()
+      .service("config", () => ({ prefix: "cfg" }))
+      .service("db", () => ({ query: (sql: string) => `real:${sql}` }));
+
+    const replaced = registry.replaceService(
+      "db",
+      ["config"],
+      ({ config }) => ({
+        query: (sql: string) => `${config.prefix}:${sql}`,
+      }),
+    );
+
+    await using services = await replaced.resolve();
+
+    expect(services.db.query("select 1")).toBe("cfg:select 1");
+  });
+
+  it("resolves a multi-hop dependency chain through a replaced service", async () => {
+    const registry = createRegistry()
+      .service("c", () => "c")
+      .service("b", ["c"], ({ c }) => `b:${c}`)
+      .service("a", () => "a");
+
+    const replaced = registry.replaceService("a", ["b"], ({ b }) => `a:${b}`);
+
+    await using services = await replaced.resolve();
+
+    expect(services.a).toBe("a:b:c");
+  });
+
+  it("rejects a replacement that depends on a service registered after it", () => {
+    const registry = createRegistry()
+      .service("a", () => "a")
+      .service("b", ["a"], ({ a }) => `b:${a}`);
+
+    const error = capture(() =>
+      // @ts-expect-error "b" was registered after "a", so this is rejected at the type level too.
+      registry.replaceService("a", ["b"], () => "a"),
+    );
+
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message:
+        'Service "a" cannot depend on "b", which was registered after it',
+    });
+  });
+
+  it("rejects a replacement that depends on itself", () => {
+    const registry = createRegistry().service("a", () => "a");
+
+    const error = capture(() =>
+      // @ts-expect-error "a" cannot depend on itself, rejected at the type level too.
+      registry.replaceService("a", ["a"], () => "a"),
+    );
+
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "a" cannot depend on itself',
+    });
   });
 
   it("applies the latest replacement when called multiple times", async () => {

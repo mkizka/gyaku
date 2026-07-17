@@ -55,4 +55,21 @@ describe("asFunctionArgs", () => {
       // @ts-expect-error createLogger2 takes only (Logger) but "db" is also declared.
       .service("repo", ["logger", "db"], asFunctionArgs(createLogger2));
   });
+
+  it("registers a positional factory via .replaceService", async () => {
+    const createDb = (logger: Logger): Db => ({
+      query: (sql) => {
+        logger.log(sql);
+        return [sql];
+      },
+    });
+
+    const services = await createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("db", (): Db => ({ query: (sql) => [sql] }))
+      .replaceService("db", ["logger"], asFunctionArgs(createDb))
+      .resolve();
+
+    expectTypeOf(services.db).toEqualTypeOf<Db>();
+  });
 });

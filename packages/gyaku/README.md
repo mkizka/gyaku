@@ -76,12 +76,18 @@ const registry = createRegistry()
   .service("server", ["config", "logger"], createServer);
 ```
 
-### `.replaceService(key, factory)`
+### `.replaceService(key, factory)` / `.replaceService(key, deps, factory)`
 
-Swaps a registered factory in place, keeping the original deps and return type.
+Swaps a registered factory in place, following the same rules as `.service` —
+deps can differ from the original registration. The replacement's return
+type must still satisfy the original contract.
 
 ```ts
-const testRegistry = productionRegistry.replaceService("db", createStubDb);
+const testRegistry = productionRegistry.replaceService(
+  "db",
+  ["config"], // can differ from the original "db" registration's deps
+  createStubDb,
+);
 ```
 
 ### `.replaceValue(key, instance)`
