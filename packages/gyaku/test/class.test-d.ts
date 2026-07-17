@@ -55,57 +55,28 @@ describe("asClass", () => {
       // @ts-expect-error "db" is missing from the declared dependencies.
       .service("greeter", ["logger"], asClass(Greeter));
   });
-});
 
-describe("asClass with { positional: true }", () => {
-  it("infers the instance type from the constructor", () => {
-    class Repo {
-      logger: Logger;
-      db: Db;
-      constructor(logger: Logger, db: Db) {
-        this.logger = logger;
-        this.db = db;
-      }
+  it("registers a class via .replaceService, widening to the class instance type", async () => {
+    interface GreeterContract {
+      greet: () => string;
     }
-
-    const factory = asClass(Repo, { positional: true });
-    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
-  });
-
-  it("registers a positional-constructor class via .service", async () => {
-    class Repo {
-      logger: Logger;
-      db: Db;
-      constructor(logger: Logger, db: Db) {
-        this.logger = logger;
-        this.db = db;
+    class GreeterImpl implements GreeterContract {
+      deps: { logger: Logger };
+      constructor(deps: { logger: Logger }) {
+        this.deps = deps;
       }
-      find() {
-        return this.db.query("select 1");
+      greet() {
+        return "hi";
       }
     }
 
     const services = await createRegistry()
       .service("logger", (): Logger => ({ log: () => undefined }))
-      .service("db", (): Db => ({ query: (sql) => [sql] }))
-      .service("repo", ["logger", "db"], asClass(Repo, { positional: true }))
+      .service("greeter", (): GreeterContract => ({ greet: () => "hi" }))
+      .replaceService("greeter", ["logger"], asClass(GreeterImpl))
       .resolve();
 
-    expectTypeOf(services.repo).toEqualTypeOf<Repo>();
-  });
-
-  it("registers a dependency-free class via the no-deps .service overload", async () => {
-    class Counter {
-      count = 0;
-    }
-
-    // The factory must be assignable to the `() => Result` overload, so no
-    // empty deps array is needed for a positional class with no dependencies.
-    const services = await createRegistry()
-      .service("counter", asClass(Counter, { positional: true }))
-      .resolve();
-
-    expectTypeOf(services.counter).toEqualTypeOf<Counter>();
+    expectTypeOf(services.greeter).toEqualTypeOf<GreeterImpl>();
   });
 });
 
@@ -297,25 +268,5 @@ describe("asClass<Interface>() (curried)", () => {
 
     // @ts-expect-error NotGreeter has no `greet`, so it is not assignable to Greeter.
     asClass<Greeter>()(NotGreeter);
-  });
-
-  it("pins the return type for a positional constructor too", () => {
-    interface Repo {
-      find: () => string[];
-    }
-    class RepoImpl implements Repo {
-      logger: Logger;
-      db: Db;
-      constructor(logger: Logger, db: Db) {
-        this.logger = logger;
-        this.db = db;
-      }
-      find() {
-        return this.db.query("select 1");
-      }
-    }
-
-    const factory = asClass<Repo>()(RepoImpl, { positional: true });
-    expectTypeOf(factory).returns.toEqualTypeOf<Repo>();
   });
 });

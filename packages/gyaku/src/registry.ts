@@ -14,10 +14,6 @@ type RegisteredKey<ServiceMap extends ServiceMapBase> = Extract<
   string
 >;
 
-// Kept independent of `ServiceMap` on purpose: a `DepsMapBase<ServiceMap>` form
-// would be re-checked whenever `replaceService` rewrites `ServiceMap`, and fail.
-type DepsMapBase = Record<string, readonly string[]>;
-
 type ReplaceValue<
   ServiceMap extends ServiceMapBase,
   Key extends keyof ServiceMap,
@@ -41,32 +37,38 @@ type ServiceDefinition = {
   factory: ServiceFactory;
 };
 
+// Per key, the union of keys that already existed when that key was first
+// registered via `.service()`. Lets `replaceService`'s 3-arg form restrict
+// `Deps` to keys registered before the one being replaced, at compile time.
+type ScopeBase = Record<string, string>;
+
 type ServiceRegistry<
   ServiceMap extends ServiceMapBase,
-  DepsMap extends DepsMapBase,
   // Original registration type per key. `replaceService` judges replacements
   // against this rather than the current `ServiceMap`, so a replacement is always
   // checked against the original contract — keeping dependents safe and letting
   // the same key be replaced repeatedly without each step narrowing the next.
   OriginalMap extends ServiceMapBase,
+  Scope extends ScopeBase,
 > = {
   service: {
-    // Before () => Result — ensures the PositionalFactory<[]> brand check fires first.
+    // Must stay first: a one-arg function is assignable to a zero-arg
+    // signature, so () => Result below would match a PositionalFactory too.
     <const Key extends string, Instance>(
       key: UnregisteredKey<Key, ServiceMap>,
       factory: PositionalFactory<[], Instance>,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Instance>>,
-      DepsMap & Record<Key, readonly []>,
-      OriginalMap & Record<Key, Awaited<Instance>>
+      OriginalMap & Record<Key, Awaited<Instance>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <const Key extends string, Result>(
       key: UnregisteredKey<Key, ServiceMap>,
       factory: () => Result,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Result>>,
-      DepsMap & Record<Key, readonly []>,
-      OriginalMap & Record<Key, Awaited<Result>>
+      OriginalMap & Record<Key, Awaited<Result>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <
       const Key extends string,
@@ -81,8 +83,8 @@ type ServiceRegistry<
       >,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Instance>>,
-      DepsMap & Record<Key, Deps>,
-      OriginalMap & Record<Key, Awaited<Instance>>
+      OriginalMap & Record<Key, Awaited<Instance>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
     <
       const Key extends string,
@@ -97,8 +99,8 @@ type ServiceRegistry<
       >,
     ): ServiceRegistry<
       ServiceMap & Record<Key, Awaited<Result>>,
-      DepsMap & Record<Key, Deps>,
-      OriginalMap & Record<Key, Awaited<Result>>
+      OriginalMap & Record<Key, Awaited<Result>>,
+      Scope & Record<Key, RegisteredKey<ServiceMap>>
     >;
   };
 
@@ -107,23 +109,68 @@ type ServiceRegistry<
     instance: T,
   ) => ServiceRegistry<
     ServiceMap & Record<Key, T>,
-    DepsMap & Record<Key, readonly []>,
-    OriginalMap & Record<Key, T>
+    OriginalMap & Record<Key, T>,
+    Scope & Record<Key, RegisteredKey<ServiceMap>>
   >;
 
-  replaceService: <
-    const Key extends RegisteredKey<ServiceMap>,
-    Result extends OriginalMap[Key],
-  >(
-    key: Key,
-    factory: (
-      deps: Pick<ServiceMap, DepsMap[Key][number]>,
-    ) => Result | Promise<Result>,
-  ) => ServiceRegistry<
-    ReplaceValue<ServiceMap, Key, Result>,
-    DepsMap,
-    OriginalMap
-  >;
+  replaceService: {
+    // Must stay first: a one-arg function is assignable to a zero-arg
+    // signature, so () => Result below would match a PositionalFactory too.
+    <
+      const Key extends RegisteredKey<ServiceMap>,
+      Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
+    >(
+      key: Key,
+      factory: PositionalFactory<[], Instance>,
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Awaited<Instance>>,
+      OriginalMap,
+      Scope
+    >;
+    <
+      const Key extends RegisteredKey<ServiceMap>,
+      Result extends OriginalMap[Key],
+    >(
+      key: Key,
+      factory: () => Result | Promise<Result>,
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Result>,
+      OriginalMap,
+      Scope
+    >;
+    <
+      const Key extends RegisteredKey<ServiceMap>,
+      const Deps extends readonly Scope[Key][],
+      Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
+    >(
+      key: Key,
+      dependencies: Deps,
+      factory: PositionalFactory<
+        { [K in keyof Deps]: ServiceMap[Deps[K]] },
+        Instance
+      >,
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Awaited<Instance>>,
+      OriginalMap,
+      Scope
+    >;
+    <
+      const Key extends RegisteredKey<ServiceMap>,
+      const Deps extends readonly Scope[Key][],
+      Result extends OriginalMap[Key],
+    >(
+      key: Key,
+      dependencies: Deps,
+      // Exclude PositionalFactory so it cannot fall through to this overload.
+      factory: NotPositionalFactory<
+        (deps: Pick<ServiceMap, Deps[number]>) => Result | Promise<Result>
+      >,
+    ): ServiceRegistry<
+      ReplaceValue<ServiceMap, Key, Result>,
+      OriginalMap,
+      Scope
+    >;
+  };
 
   replaceValue: <
     const Key extends RegisteredKey<ServiceMap>,
@@ -131,21 +178,47 @@ type ServiceRegistry<
   >(
     key: Key,
     instance: T,
-  ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, DepsMap, OriginalMap>;
-
-  /** @deprecated Use {@link ServiceRegistry.replaceService} instead. Will be removed in the next major version. */
-  override: ServiceRegistry<ServiceMap, DepsMap, OriginalMap>["replaceService"];
+  ) => ServiceRegistry<ReplaceValue<ServiceMap, Key, T>, OriginalMap, Scope>;
 
   resolve: () => Promise<ServiceMap & AsyncDisposable>;
 };
 
+const parseFactoryArgs = (
+  key: string,
+  factoryOrDeps: ServiceFactory | readonly string[],
+  maybeFactory: ServiceFactory | undefined,
+): { dependencies: readonly string[]; factory: ServiceFactory } => {
+  if (typeof factoryOrDeps === "function") {
+    return { dependencies: [], factory: factoryOrDeps };
+  }
+  if (typeof maybeFactory !== "function") {
+    throw new RegistryError(`Service "${key}" factory is required`);
+  }
+  return { dependencies: factoryOrDeps, factory: maybeFactory };
+};
+
+const validateDependencies = (
+  definitions: readonly ServiceDefinition[],
+  key: string,
+  dependencies: readonly string[],
+) => {
+  const registered = new Set(definitions.map((d) => d.key));
+  for (const dep of dependencies) {
+    if (!registered.has(dep)) {
+      throw new RegistryError(
+        `Service "${key}" depends on unregistered service "${dep}"`,
+      );
+    }
+  }
+};
+
 const makeRegistry = <
   ServiceMap extends ServiceMapBase,
-  DepsMap extends DepsMapBase,
   OriginalMap extends ServiceMapBase,
+  Scope extends ScopeBase,
 >(
   definitions: readonly ServiceDefinition[],
-): ServiceRegistry<ServiceMap, DepsMap, OriginalMap> => {
+): ServiceRegistry<ServiceMap, OriginalMap, Scope> => {
   const registry = {
     service(
       key: string,
@@ -159,27 +232,13 @@ const makeRegistry = <
         throw new RegistryError(`Service "${key}" is already registered`);
       }
 
-      let dependencies: readonly string[];
-      let factory: ServiceFactory;
-      if (typeof factoryOrDeps === "function") {
-        dependencies = [];
-        factory = factoryOrDeps;
-      } else {
-        if (typeof maybeServiceFactory !== "function") {
-          throw new RegistryError(`Service "${key}" factory is required`);
-        }
-        dependencies = factoryOrDeps;
-        factory = maybeServiceFactory;
-      }
+      const { dependencies, factory } = parseFactoryArgs(
+        key,
+        factoryOrDeps,
+        maybeServiceFactory,
+      );
 
-      const registered = new Set(definitions.map((d) => d.key));
-      for (const dep of dependencies) {
-        if (!registered.has(dep)) {
-          throw new RegistryError(
-            `Service "${key}" depends on unregistered service "${dep}"`,
-          );
-        }
-      }
+      validateDependencies(definitions, key, dependencies);
 
       return makeRegistry([...definitions, { key, dependencies, factory }]);
     },
@@ -188,24 +247,48 @@ const makeRegistry = <
       return registry.service(key, () => instance);
     },
 
-    replaceService(key: string, factory: ServiceFactory) {
+    replaceService(
+      key: string,
+      factoryOrDeps: ServiceFactory | readonly string[],
+      maybeFactory?: ServiceFactory,
+    ) {
       const index = definitions.findIndex((d) => d.key === key);
       if (index === -1) {
         throw new RegistryError(`Service "${key}" is not registered`);
       }
 
+      const { dependencies, factory } = parseFactoryArgs(
+        key,
+        factoryOrDeps,
+        maybeFactory,
+      );
+
+      for (const dep of dependencies) {
+        if (dep === key) {
+          throw new RegistryError(`Service "${key}" cannot depend on itself`);
+        }
+      }
+      validateDependencies(definitions, key, dependencies);
+
+      // Mirrors .service(): a dep must already occupy an earlier slot than
+      // the service being replaced, so the dependency graph stays acyclic
+      // by construction instead of needing a cycle check.
+      for (const dep of dependencies) {
+        const depIndex = definitions.findIndex((d) => d.key === dep);
+        if (depIndex > index) {
+          throw new RegistryError(
+            `Service "${key}" cannot depend on "${dep}", which was registered after it`,
+          );
+        }
+      }
+
       const next = [...definitions];
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- index was just verified to be a valid position in definitions.
-      next[index] = { ...next[index]!, factory };
+      next[index] = { key, dependencies, factory };
       return makeRegistry(next);
     },
 
     replaceValue(key: string, instance: unknown) {
       return registry.replaceService(key, () => instance);
-    },
-
-    override(key: string, factory: ServiceFactory) {
-      return registry.replaceService(key, factory);
     },
 
     async resolve() {
@@ -262,16 +345,12 @@ const makeRegistry = <
   };
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The structural registry satisfies the overloaded ServiceRegistry type at runtime.
-  return registry as unknown as ServiceRegistry<
-    ServiceMap,
-    DepsMap,
-    OriginalMap
-  >;
+  return registry as unknown as ServiceRegistry<ServiceMap, OriginalMap, Scope>;
 };
 
 export const createRegistry = (): ServiceRegistry<
   Record<never, never>,
-  Record<never, readonly []>,
+  Record<never, never>,
   Record<never, never>
 > => makeRegistry([]);
 

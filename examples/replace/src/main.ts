@@ -43,16 +43,13 @@ const productionRegistry = createRegistry()
 
 // Returns more than `Db`: `replaceService` widens the service type, so the
 // extra `seed`/`clear` are callable on the resolved service.
-const createStubDb = ({ logger }: { logger: Logger }) => {
+const createStubDb = () => {
   const users = new Map<number, User>();
-  logger.log("stub db ready");
   return {
     findUser: async (id: number) => users.get(id),
     seed: (user: User) => users.set(user.id, user),
     clear: () => users.clear(),
-    [Symbol.asyncDispose]: async () => {
-      logger.log("stub db disposed");
-    },
+    [Symbol.asyncDispose]: async () => {},
   };
 };
 
