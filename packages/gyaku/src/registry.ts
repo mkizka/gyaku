@@ -46,7 +46,8 @@ type ServiceRegistry<
   OriginalMap extends ServiceMapBase,
 > = {
   service: {
-    // Before () => Result — ensures the PositionalFactory<[]> brand check fires first.
+    // Must stay first: a one-arg function is assignable to a zero-arg
+    // signature, so () => Result below would match a PositionalFactory too.
     <const Key extends string, Instance>(
       key: UnregisteredKey<Key, ServiceMap>,
       factory: PositionalFactory<[], Instance>,
@@ -102,7 +103,8 @@ type ServiceRegistry<
   >;
 
   replaceService: {
-    // Before () => Result — ensures the PositionalFactory<[]> brand check fires first.
+    // Must stay first: a one-arg function is assignable to a zero-arg
+    // signature, so () => Result below would match a PositionalFactory too.
     <
       const Key extends RegisteredKey<ServiceMap>,
       Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
