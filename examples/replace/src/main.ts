@@ -61,7 +61,7 @@ const testLogger: Logger = {
 };
 
 const testRegistry = productionRegistry
-  .replaceService("db", createStubDb)
+  .replaceService("db", ["logger"], createStubDb)
   .replaceValue("logger", testLogger);
 
 const main = async () => {

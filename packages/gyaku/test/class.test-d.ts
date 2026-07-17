@@ -55,6 +55,29 @@ describe("asClass", () => {
       // @ts-expect-error "db" is missing from the declared dependencies.
       .service("greeter", ["logger"], asClass(Greeter));
   });
+
+  it("registers a class via .replaceService, widening to the class instance type", async () => {
+    interface GreeterContract {
+      greet: () => string;
+    }
+    class GreeterImpl implements GreeterContract {
+      deps: { logger: Logger };
+      constructor(deps: { logger: Logger }) {
+        this.deps = deps;
+      }
+      greet() {
+        return "hi";
+      }
+    }
+
+    const services = await createRegistry()
+      .service("logger", (): Logger => ({ log: () => undefined }))
+      .service("greeter", (): GreeterContract => ({ greet: () => "hi" }))
+      .replaceService("greeter", ["logger"], asClass(GreeterImpl))
+      .resolve();
+
+    expectTypeOf(services.greeter).toEqualTypeOf<GreeterImpl>();
+  });
 });
 
 describe("asClass with { positional: true }", () => {

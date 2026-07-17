@@ -450,7 +450,7 @@ describe("createRegistry", () => {
     expect(services.second.first.tag).toBe("first");
   });
 
-  it("inherits the original service's dependencies in .replaceService", async () => {
+  it("takes no deps in the 2-arg form, even if the original service had deps", async () => {
     const registry = createRegistry()
       .service("logger", () => ({
         log: (message: string) => `log:${message}`,
@@ -459,13 +459,150 @@ describe("createRegistry", () => {
         query: (sql: string) => logger.log(`real:${sql}`),
       }));
 
-    const replaced = registry.replaceService("db", ({ logger }) => ({
-      query: (sql: string) => logger.log(`replaced:${sql}`),
+    const replaced = registry.replaceService("db", () => ({
+      query: (sql: string) => `stub:${sql}`,
     }));
 
     await using services = await replaced.resolve();
 
+    expect(services.db.query("select 1")).toBe("stub:select 1");
+  });
+
+  it("receives exactly the deps passed to the 3-arg form", async () => {
+    const registry = createRegistry()
+      .service("logger", () => ({
+        log: (message: string) => `log:${message}`,
+      }))
+      .service("db", ["logger"], ({ logger }) => ({
+        query: (sql: string) => logger.log(`real:${sql}`),
+      }));
+
+    const replaced = registry.replaceService(
+      "db",
+      ["logger"],
+      ({ logger }) => ({
+        query: (sql: string) => logger.log(`replaced:${sql}`),
+      }),
+    );
+
+    await using services = await replaced.resolve();
+
     expect(services.db.query("select 1")).toBe("log:replaced:select 1");
+  });
+
+  it("replaces with a stub depending on different services than the original", async () => {
+    const registry = createRegistry()
+      .service("logger", () => ({
+        log: (message: string) => `log:${message}`,
+      }))
+      .value("config", { prefix: "cfg" })
+      .service("db", ["logger"], ({ logger }) => ({
+        query: (sql: string) => logger.log(`real:${sql}`),
+      }));
+
+    const replaced = registry.replaceService(
+      "db",
+      ["config"],
+      ({ config }) => ({
+        query: (sql: string) => `${config.prefix}:${sql}`,
+      }),
+    );
+
+    await using services = await replaced.resolve();
+
+    expect(services.db.query("select 1")).toBe("cfg:select 1");
+  });
+
+  it("resolves correctly when the new dep is registered after the original service", async () => {
+    const registry = createRegistry()
+      .service("db", () => ({ query: (sql: string) => `real:${sql}` }))
+      .service("config", () => ({ prefix: "cfg" }));
+
+    const replaced = registry.replaceService(
+      "db",
+      ["config"],
+      ({ config }) => ({
+        query: (sql: string) => `${config.prefix}:${sql}`,
+      }),
+    );
+
+    await using services = await replaced.resolve();
+
+    expect(services.db.query("select 1")).toBe("cfg:select 1");
+  });
+
+  it("allows depending on a service whose own dependencies do not lead back to it", async () => {
+    const registry = createRegistry()
+      .service("c", () => "c")
+      .service("b", ["c"], ({ c }) => `b:${c}`)
+      .service("a", () => "a");
+
+    const replaced = registry.replaceService("a", ["b"], ({ b }) => `a:${b}`);
+
+    await using services = await replaced.resolve();
+
+    expect(services.a).toBe("a:b:c");
+  });
+
+  it("allows a diamond-shaped dependency graph where a shared ancestor is reachable via two new deps", async () => {
+    const registry = createRegistry()
+      .service("shared", () => "shared")
+      .service("left", ["shared"], ({ shared }) => `left:${shared}`)
+      .service("right", ["shared"], ({ shared }) => `right:${shared}`)
+      .service("a", () => "a");
+
+    // "shared" is reached once via "left" and again via "right"; the second
+    // visit must be served from the memoized visited set instead of
+    // re-walking "shared"'s (empty) dependencies.
+    const replaced = registry.replaceService(
+      "a",
+      ["left", "right"],
+      ({ left, right }) => `a:${left}:${right}`,
+    );
+
+    await using services = await replaced.resolve();
+
+    expect(services.a).toBe("a:left:shared:right:shared");
+  });
+
+  it("rejects replaceService's 3-arg form with a missing factory", () => {
+    const error = capture(() =>
+      createRegistry()
+        .service("logger", () => ({ log: (m: string) => m }))
+        .service("db", ["logger"], () => ({ query: () => [] }))
+        // @ts-expect-error missing factory is rejected at the type level too.
+        .replaceService("db", ["logger"]),
+    );
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "db" factory is required',
+    });
+  });
+
+  it("rejects a replacement that would create a circular dependency", () => {
+    const registry = createRegistry()
+      .service("a", () => "a")
+      .service("b", ["a"], ({ a }) => `b:${a}`);
+
+    const error = capture(() =>
+      registry.replaceService("a", ["b"], ({ b }) => `a:${b}`),
+    );
+
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "a" cannot depend on "b", which depends on "a"',
+    });
+  });
+
+  it("rejects a replacement that depends on itself", () => {
+    const registry = createRegistry().service("a", () => "a");
+
+    const error = capture(() => registry.replaceService("a", ["a"], () => "a"));
+
+    expect(error).toBeInstanceOf(RegistryError);
+    expect(error).toMatchObject({
+      message: 'Service "a" cannot depend on itself',
+    });
   });
 
   it("applies the latest replacement when called multiple times", async () => {
@@ -534,6 +671,23 @@ describe("createRegistry", () => {
     await using services = await replaced.resolve();
 
     expect(services.greeting).toBe("replaced");
+  });
+
+  it("forwards the 3-arg form's deps through the deprecated .override", async () => {
+    const registry = createRegistry()
+      .value("name", "gyaku")
+      .service("greeting", () => "original");
+
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the deprecated alias must keep working until the next major version.
+    const replaced = registry.override(
+      "greeting",
+      ["name"],
+      ({ name }) => `hi, ${name}`,
+    );
+
+    await using services = await replaced.resolve();
+
+    expect(services.greeting).toBe("hi, gyaku");
   });
 
   it("runs independent factories in parallel", async () => {

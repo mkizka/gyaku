@@ -26,4 +26,18 @@ describe("asFunctionArgs", () => {
 
     expect(services.counter).toEqual({ count: 0 });
   });
+
+  it("replaces a service with a positional stub via .replaceService", async () => {
+    const createDb = (prefix: string) => ({
+      query: (sql: string) => `${prefix}:${sql}`,
+    });
+
+    await using services = await createRegistry()
+      .value("prefix", "stub")
+      .service("db", () => ({ query: (sql: string) => `real:${sql}` }))
+      .replaceService("db", ["prefix"], asFunctionArgs(createDb))
+      .resolve();
+
+    expect(services.db.query("select 1")).toBe("stub:select 1");
+  });
 });

@@ -160,22 +160,38 @@ describe("ServiceRegistry.resolve", () => {
 });
 
 describe("ServiceRegistry.replaceService", () => {
-  it("inherits the original service's deps shape", () => {
+  it("takes no deps in the 2-arg form, like .service", () => {
     createRegistry()
       .service("logger", (): Logger => ({ log: (m) => m }))
       .service("db", ["logger"], ({ logger }): Db => ({
         query: (sql) => [logger.log(sql)],
       }))
-      .replaceService("db", (deps) => {
+      .replaceService("db", () => ({ query: (sql) => [sql] }));
+  });
+
+  it("receives exactly the deps declared in the 3-arg form", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .service("db", ["logger"], ({ logger }): Db => ({
+        query: (sql) => [logger.log(sql)],
+      }))
+      .replaceService("db", ["logger"], (deps) => {
         expectTypeOf(deps).toEqualTypeOf<{ logger: Logger }>();
         return { query: (sql) => [sql] };
       });
   });
 
-  it("accepts a no-arg factory when the original service had no deps", () => {
+  it("accepts deps different from the original registration", () => {
     createRegistry()
+      .value("config", { prefix: "stub" })
       .service("logger", (): Logger => ({ log: (m) => m }))
-      .replaceService("logger", () => ({ log: (m) => m }));
+      .service("db", ["logger"], ({ logger }): Db => ({
+        query: (sql) => [logger.log(sql)],
+      }))
+      .replaceService("db", ["config"], (deps) => {
+        expectTypeOf(deps).toEqualTypeOf<{ config: { prefix: string } }>();
+        return { query: (sql) => [`${deps.config.prefix}:${sql}`] };
+      });
   });
 
   it("rejects replacing an unregistered key", () => {
@@ -190,6 +206,13 @@ describe("ServiceRegistry.replaceService", () => {
       .service("logger", (): Logger => ({ log: (m) => m }))
       // @ts-expect-error number is not assignable to Logger.
       .replaceService("logger", () => 42);
+  });
+
+  it("rejects depending on an unregistered key in the 3-arg form", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      // @ts-expect-error "missing" has not been registered.
+      .replaceService("logger", ["missing"], () => ({ log: (m) => m }));
   });
 
   it("preserves the existing Services type", () => {
