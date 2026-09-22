@@ -7,6 +7,8 @@ import {
   ServiceFactoryError,
 } from "./errors.js";
 
+type NonEmptyArray<T> = readonly [T, ...T[]];
+
 type ServiceMapBase = Record<string, unknown>;
 
 type RegisteredKey<ServiceMap extends ServiceMapBase> = Extract<
@@ -72,10 +74,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly [
-        RegisteredKey<ServiceMap>,
-        ...RegisteredKey<ServiceMap>[],
-      ],
+      const Deps extends NonEmptyArray<RegisteredKey<ServiceMap>>,
       Instance,
     >(
       key: UnregisteredKey<Key, ServiceMap>,
@@ -91,10 +90,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly [
-        RegisteredKey<ServiceMap>,
-        ...RegisteredKey<ServiceMap>[],
-      ],
+      const Deps extends NonEmptyArray<RegisteredKey<ServiceMap>>,
       Result,
     >(
       key: UnregisteredKey<Key, ServiceMap>,
@@ -146,7 +142,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly [Scope[Key], ...Scope[Key][]],
+      const Deps extends NonEmptyArray<Scope[Key]>,
       Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
     >(
       key: Key,
@@ -162,7 +158,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly [Scope[Key], ...Scope[Key][]],
+      const Deps extends NonEmptyArray<Scope[Key]>,
       Result extends OriginalMap[Key],
     >(
       key: Key,
