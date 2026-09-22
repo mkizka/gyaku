@@ -69,6 +69,13 @@ describe("ServiceRegistry.service", () => {
       .service("repo", ["db"], () => undefined);
   });
 
+  it("rejects an empty deps array; use the 2-arg form instead", () => {
+    createRegistry()
+      .service("logger", () => undefined)
+      // @ts-expect-error deps must be non-empty; use .service(key, factory) for no deps.
+      .service("repo", [], () => undefined);
+  });
+
   it("rejects duplicate service keys", () => {
     createRegistry()
       .service("logger", () => undefined)
@@ -192,6 +199,16 @@ describe("ServiceRegistry.replaceService", () => {
         expectTypeOf(deps).toEqualTypeOf<{ config: { prefix: string } }>();
         return { query: (sql) => [`${deps.config.prefix}:${sql}`] };
       });
+  });
+
+  it("rejects an empty deps array; use the 2-arg form instead", () => {
+    createRegistry()
+      .service("logger", (): Logger => ({ log: (m) => m }))
+      .service("db", ["logger"], ({ logger }): Db => ({
+        query: (sql) => [logger.log(sql)],
+      }))
+      // @ts-expect-error deps must be non-empty; use .replaceService(key, factory) for no deps.
+      .replaceService("db", [], () => ({ query: (sql) => [sql] }));
   });
 
   it("rejects replacing an unregistered key", () => {
