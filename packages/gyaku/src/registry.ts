@@ -72,7 +72,10 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly RegisteredKey<ServiceMap>[],
+      const Deps extends readonly [
+        RegisteredKey<ServiceMap>,
+        ...RegisteredKey<ServiceMap>[],
+      ],
       Instance,
     >(
       key: UnregisteredKey<Key, ServiceMap>,
@@ -88,7 +91,10 @@ type ServiceRegistry<
     >;
     <
       const Key extends string,
-      const Deps extends readonly RegisteredKey<ServiceMap>[],
+      const Deps extends readonly [
+        RegisteredKey<ServiceMap>,
+        ...RegisteredKey<ServiceMap>[],
+      ],
       Result,
     >(
       key: UnregisteredKey<Key, ServiceMap>,
@@ -140,7 +146,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly Scope[Key][],
+      const Deps extends readonly [Scope[Key], ...Scope[Key][]],
       Instance extends OriginalMap[Key] | Promise<OriginalMap[Key]>,
     >(
       key: Key,
@@ -156,7 +162,7 @@ type ServiceRegistry<
     >;
     <
       const Key extends RegisteredKey<ServiceMap>,
-      const Deps extends readonly Scope[Key][],
+      const Deps extends readonly [Scope[Key], ...Scope[Key][]],
       Result extends OriginalMap[Key],
     >(
       key: Key,
